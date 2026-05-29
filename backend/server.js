@@ -3,6 +3,8 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const fs = require('fs');
+const path = require('path');
 
 dotenv.config();
 
@@ -11,6 +13,57 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+
+// Database configuration (simple JSON file-based database for zero-friction setup)
+const DB_PATH = path.join(__dirname, 'data', 'db.json');
+
+// Ensure data directory exists
+if (!fs.existsSync(path.join(__dirname, 'data'))) {
+  fs.mkdirSync(path.join(__dirname, 'data'));
+}
+
+// Initialize database if it doesn't exist
+if (!fs.existsSync(DB_PATH)) {
+  fs.writeFileSync(DB_PATH, JSON.stringify({ pages: [], chunks: [], settings: {} }, null, 2));
+}
+
+// Helper to read database
+function readDB() {
+  try {
+    const data = fs.readFileSync(DB_PATH, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error reading database:', error);
+    return { pages: [], chunks: [], settings: {} };
+  }
+}
+
+// Helper to write database
+function writeDB(data) {
+  try {
+    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+  } catch (error) {
+    console.error('Error writing database:', error);
+  }
+}
+
+// Utility to clean text content
+function cleanText(text) {
+  return text
+    .replace(/\s+/g, ' ')
+    .replace(/\n+/g, ' ')
+    .trim();
+}
+
+// Utility to validate URLs
+function isValidUrl(urlString) {
+  try {
+    const url = new URL(urlString);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch (e) {
+    return false;
+  }
+}
 
 // Scrape a single URL helper
 async function scrapePage(url) {
@@ -31,7 +84,7 @@ async function scrapePage(url) {
     // Clean scripts, styles, etc.
     $('script, style, nav, footer, header, iframe').remove();
     const rawText = $('body').text();
-    const cleanText = rawText.replace(/\s+/g, ' ').replace(/\n+/g, ' ').trim();
+    const cleanTextStr = cleanText(rawText);
     
     // Extract raw links
     const links = [];
@@ -43,7 +96,7 @@ async function scrapePage(url) {
     return {
       title,
       description,
-      content: cleanText,
+      content: cleanTextStr,
       links: [...new Set(links)] // deduplicated
     };
   } catch (error) {
@@ -51,25 +104,107 @@ async function scrapePage(url) {
   }
 }
 
-// Temporary test endpoint to check single-page scraping
-app.get('/api/test-scrape', async (req, res) => {
-  const { url } = req.query;
-  if (!url) {
-    return res.status(400).json({ error: 'URL parameter is required' });
+// Recursive crawler logic
+async function crawlUrl(startUrl, maxDepth = 2, maxPages = 15) {
+  const visited = new Set();
+  const queue = [{ url: startUrl, depth: 1 }];
+  const crawledPages = [];
+  const startHostname = new URL(startUrl).hostname;
+
+  while (queue.length > 0 && crawledPages.length < maxPages) {
+    const { url, depth } = queue.shift();
+
+    if (visited.has(url)) continue;
+    visited.add(url);
+
+    try {
+      console.log(`Crawling: ${url} at depth ${depth}`);
+      const data = await scrapePage(url);
+      
+      const pageData = {
+        id: Buffer.from(url).toString('base64').substring(0, 16),
+        url,
+        title: data.title,
+        description: data.description,
+        content: data.content,
+        wordCount: data.content.split(/\s+/).filter(Boolean).length,
+        crawledAt: new Date().toISOString()
+      };
+
+      crawledPages.push(pageData);
+
+      // If we haven't reached max depth, add same-origin links to the queue
+      if (depth < maxDepth) {
+        for (const rawLink of data.links) {
+          try {
+            const resolvedUrl = new URL(rawLink, url).href;
+            const urlObj = new URL(resolvedUrl);
+            urlObj.hash = ''; // Strip fragments
+
+            const finalUrl = urlObj.href;
+
+            if (urlObj.hostname === startHostname && !visited.has(finalUrl) && isValidUrl(finalUrl)) {
+              if (!queue.some(item => item.url === finalUrl)) {
+                queue.push({ url: finalUrl, depth: depth + 1 });
+              }
+            }
+          } catch (e) {
+            // Ignore invalid URLs
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Error crawling ${url}:`, error.message);
+    }
   }
+
+  return crawledPages;
+}
+
+// Crawling endpoint (starts crawl, saves to db.json, returns result)
+app.get('/api/crawl', async (req, res) => {
+  const { url, depth, maxPages } = req.query;
+
+  if (!url || !isValidUrl(url)) {
+    return res.status(400).json({ error: 'A valid starting URL is required.' });
+  }
+
+  const crawlDepth = parseInt(depth) || 2;
+  const crawlMaxPages = parseInt(maxPages) || 15;
+
   try {
-    const data = await scrapePage(url);
-    res.json({ success: true, data });
+    const crawledPages = await crawlUrl(url, crawlDepth, crawlMaxPages);
+    
+    // Save to db.json
+    const db = readDB();
+    db.pages = crawledPages;
+    db.chunks = []; // Clear old chunks
+    db.settings = { currentSite: url, crawledAt: new Date().toISOString() };
+    writeDB(db);
+
+    res.json({
+      success: true,
+      message: `Crawling completed. Processed ${crawledPages.length} pages.`,
+      pagesCount: crawledPages.length
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
+// Endpoint to retrieve crawled pages
+app.get('/api/pages', (req, res) => {
+  const db = readDB();
+  res.json({ pages: db.pages, settings: db.settings });
+});
+
 // Root status check
 app.get('/api/status', (req, res) => {
+  const db = readDB();
   res.json({
     status: 'online',
-    message: 'Prometheus AI API is running'
+    crawledPagesCount: db.pages.length,
+    currentSite: db.settings.currentSite || null
   });
 });
 
