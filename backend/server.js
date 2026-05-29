@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// Database configuration (simple JSON file-based database for zero-friction setup)
+// Database configuration (JSON)
 const DB_PATH = path.join(__dirname, 'data', 'db.json');
 
 // Ensure data directory exists
@@ -108,7 +108,7 @@ async function scrapePage(url) {
 }
 
 // Recursive crawler logic
-async function crawlUrl(startUrl, maxDepth = 2, maxPages = 15) {
+async function crawlUrl(startUrl, maxDepth = 2, maxPages = 15, onProgress) {
   const visited = new Set();
   const queue = [{ url: startUrl, depth: 1 }];
   const crawledPages = [];
@@ -119,6 +119,8 @@ async function crawlUrl(startUrl, maxDepth = 2, maxPages = 15) {
 
     if (visited.has(url)) continue;
     visited.add(url);
+
+    onProgress({ type: 'page_start', url, depth, count: crawledPages.length });
 
     try {
       console.log(`Crawling: ${url} at depth ${depth}`);
@@ -135,6 +137,7 @@ async function crawlUrl(startUrl, maxDepth = 2, maxPages = 15) {
       };
 
       crawledPages.push(pageData);
+      onProgress({ type: 'page_success', page: { url, title: data.title, wordCount: pageData.wordCount, id: pageData.id } });
 
       // If we haven't reached max depth, add same-origin links to the queue
       if (depth < maxDepth) {
@@ -158,13 +161,14 @@ async function crawlUrl(startUrl, maxDepth = 2, maxPages = 15) {
       }
     } catch (error) {
       console.error(`Error crawling ${url}:`, error.message);
+      onProgress({ type: 'page_error', url, error: error.message });
     }
   }
 
   return crawledPages;
 }
 
-// Crawling endpoint (starts crawl, saves to db.json, returns result)
+// Crawling endpoint with Server-Sent Events (SSE) progress streaming
 app.get('/api/crawl', async (req, res) => {
   const { url, depth, maxPages } = req.query;
 
@@ -175,8 +179,40 @@ app.get('/api/crawl', async (req, res) => {
   const crawlDepth = parseInt(depth) || 2;
   const crawlMaxPages = parseInt(maxPages) || 15;
 
+  // Set headers for Server-Sent Events
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+
+  // Keep connections alive
+  const keepAliveInterval = setInterval(() => {
+    res.write(': keepalive\n\n');
+  }, 15000);
+
+  const sendEvent = (event, data) => {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  sendEvent('status', { message: `Initializing crawler for ${url}...`, type: 'info' });
+
   try {
-    const crawledPages = await crawlUrl(url, crawlDepth, crawlMaxPages);
+    const crawledPages = await crawlUrl(
+      url,
+      crawlDepth,
+      crawlMaxPages,
+      (progress) => {
+        if (progress.type === 'page_start') {
+          sendEvent('page_start', { url: progress.url, depth: progress.depth, count: progress.count });
+        } else if (progress.type === 'page_success') {
+          sendEvent('page_success', { page: progress.page });
+        } else if (progress.type === 'page_error') {
+          sendEvent('page_error', { url: progress.url, error: progress.error });
+        }
+      }
+    );
 
     // Save to db.json
     const db = readDB();
@@ -185,13 +221,16 @@ app.get('/api/crawl', async (req, res) => {
     db.settings = { currentSite: url, crawledAt: new Date().toISOString() };
     writeDB(db);
 
-    res.json({
-      success: true,
+    sendEvent('status', {
       message: `Crawling completed. Processed ${crawledPages.length} pages.`,
+      type: 'success',
       pagesCount: crawledPages.length
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    sendEvent('status', { message: `Crawl failed: ${error.message}`, type: 'error' });
+  } finally {
+    clearInterval(keepAliveInterval);
+    res.end();
   }
 });
 
