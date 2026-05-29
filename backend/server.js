@@ -74,18 +74,21 @@ async function scrapePage(url) {
       },
       timeout: 5000
     });
-    
+
     const html = response.data;
     const $ = cheerio.load(html);
-    
+
     const title = $('title').text().trim() || url;
     const description = $('meta[name="description"]').attr('content') || '';
-    
+
     // Clean scripts, styles, etc.
     $('script, style, nav, footer, header, iframe').remove();
     const rawText = $('body').text();
     const cleanTextStr = cleanText(rawText);
-    
+    const words = cleanTextStr.split(/\s+/).filter(Boolean);
+    const wordCount = words.length;
+
+
     // Extract raw links
     const links = [];
     $('a[href]').each((_, el) => {
@@ -120,7 +123,7 @@ async function crawlUrl(startUrl, maxDepth = 2, maxPages = 15) {
     try {
       console.log(`Crawling: ${url} at depth ${depth}`);
       const data = await scrapePage(url);
-      
+
       const pageData = {
         id: Buffer.from(url).toString('base64').substring(0, 16),
         url,
@@ -174,7 +177,7 @@ app.get('/api/crawl', async (req, res) => {
 
   try {
     const crawledPages = await crawlUrl(url, crawlDepth, crawlMaxPages);
-    
+
     // Save to db.json
     const db = readDB();
     db.pages = crawledPages;
