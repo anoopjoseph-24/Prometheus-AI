@@ -58,13 +58,13 @@ export default function App() {
       <header className="border-b border-dark-border bg-dark-card/40 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-primary to-brand-cyan flex items-center justify-center shadow-lg shadow-brand-primary/20">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-primary to-rose-700 flex items-center justify-center shadow-lg shadow-brand-primary/20">
               <span className="text-xl font-bold text-white font-mono">P</span>
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
                 Prometheus AI
-                <span className="text-xs bg-brand-primary/20 text-brand-glow px-2 py-0.5 rounded-full font-medium border border-brand-primary/30">
+                <span className="text-xs bg-brand-primary/10 text-brand-glow px-2 py-0.5 rounded-full font-medium border border-brand-primary/20">
                   RAG Intelligence
                 </span>
               </h1>
@@ -77,7 +77,7 @@ export default function App() {
               onClick={() => setActiveTab('crawl')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'crawl' 
-                  ? 'bg-dark-card text-brand-cyan border border-brand-cyan/20' 
+                  ? 'bg-dark-card text-brand-glow border border-brand-primary/30' 
                   : 'text-slate-400 hover:text-slate-200 hover:bg-dark-card/50'
               }`}
             >
@@ -88,7 +88,7 @@ export default function App() {
               onClick={() => setActiveTab('chunks')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'chunks' 
-                  ? 'bg-dark-card text-brand-cyan border border-brand-cyan/20' 
+                  ? 'bg-dark-card text-brand-glow border border-brand-primary/30' 
                   : 'text-slate-400 hover:text-slate-200 hover:bg-dark-card/50'
               }`}
             >
@@ -99,7 +99,7 @@ export default function App() {
               onClick={() => setActiveTab('chat')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'chat' 
-                  ? 'bg-dark-card text-brand-cyan border border-brand-cyan/20' 
+                  ? 'bg-dark-card text-brand-glow border border-brand-primary/30' 
                   : 'text-slate-400 hover:text-slate-200 hover:bg-dark-card/50'
               }`}
             >
@@ -110,7 +110,7 @@ export default function App() {
               onClick={() => setActiveTab('summary')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'summary' 
-                  ? 'bg-dark-card text-brand-cyan border border-brand-cyan/20' 
+                  ? 'bg-dark-card text-brand-glow border border-brand-primary/30' 
                   : 'text-slate-400 hover:text-slate-200 hover:bg-dark-card/50'
               }`}
             >
@@ -121,7 +121,7 @@ export default function App() {
               onClick={() => setActiveTab('analytics')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'analytics' 
-                  ? 'bg-dark-card text-brand-cyan border border-brand-cyan/20' 
+                  ? 'bg-dark-card text-brand-glow border border-brand-primary/30' 
                   : 'text-slate-400 hover:text-slate-200 hover:bg-dark-card/50'
               }`}
             >
@@ -141,7 +141,7 @@ export default function App() {
             <div className="lg:col-span-1 flex flex-col gap-6">
               <div className="glass-card rounded-2xl p-6 flex flex-col gap-5">
                 <div className="flex items-center gap-2 text-white border-b border-dark-border pb-3">
-                  <Sliders className="text-brand-cyan" size={20} />
+                  <Sliders className="text-brand-glow" size={20} />
                   <h2 className="text-lg font-semibold">Crawl Settings</h2>
                 </div>
 
@@ -164,7 +164,7 @@ export default function App() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-xs text-slate-400 font-medium block mb-2">Max Depth</label>
+                      <label className="text-xs text-slate-400 font-medium block mb-2">Max Depth (1 - 3)</label>
                       <input 
                         type="number" 
                         min="1" 
@@ -176,7 +176,7 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-slate-400 font-medium block mb-2">Max Pages</label>
+                      <label className="text-xs text-slate-400 font-medium block mb-2">Max Pages (1 - 50)</label>
                       <input 
                         type="number" 
                         min="1" 
@@ -196,7 +196,7 @@ export default function App() {
                       checked={onlySameDomain}
                       onChange={(e) => setOnlySameDomain(e.target.checked)}
                       disabled={isCrawling}
-                      className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900"
+                      className="rounded border-slate-700 bg-slate-900 text-red-600 focus:ring-red-500 focus:ring-offset-slate-900"
                     />
                     <label htmlFor="domain" className="text-xs text-slate-300 select-none">
                       Stay inside starting domain only
@@ -206,7 +206,7 @@ export default function App() {
                   <button 
                     type="submit"
                     disabled={isCrawling || !targetUrl}
-                    className="w-full mt-2 bg-gradient-to-r from-brand-primary to-brand-cyan hover:shadow-lg hover:shadow-brand-primary/20 text-white font-medium py-3 rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full mt-2 bg-gradient-to-r from-brand-primary to-rose-700 hover:shadow-lg hover:shadow-brand-primary/20 text-white font-medium py-3 rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isCrawling ? (
                       <>
@@ -227,14 +227,14 @@ export default function App() {
               <div className="glass-card rounded-2xl p-6 flex-1 flex flex-col gap-4 min-h-[220px]">
                 <div className="flex items-center justify-between border-b border-dark-border pb-3">
                   <div className="flex items-center gap-2 text-white">
-                    <RefreshCw className={`text-brand-cyan ${isCrawling ? 'animate-spin' : ''}`} size={18} />
+                    <RefreshCw className={`text-brand-glow ${isCrawling ? 'animate-spin' : ''}`} size={18} />
                     <h2 className="text-base font-semibold">Console Output</h2>
                   </div>
                 </div>
 
                 <div className="flex-1 bg-dark-bg/80 border border-dark-border rounded-xl p-4 font-mono text-xs overflow-y-auto max-h-[250px] text-slate-400">
                   <div># Output terminal initialized</div>
-                  <div className="text-brand-cyan mt-1">&gt; {crawlMessage}</div>
+                  <div className="text-brand-glow mt-1">&gt; {crawlMessage}</div>
                 </div>
               </div>
             </div>
@@ -242,7 +242,7 @@ export default function App() {
             {/* Sitemap Graphic Placeholder */}
             <div className="lg:col-span-2 flex flex-col gap-6">
               <div className="glass-card rounded-2xl p-6 flex flex-col gap-4 min-h-[400px] justify-center items-center text-center">
-                <Globe className="text-dark-muted mb-4 animate-pulse" size={48} />
+                <Globe className="text-red-500/60 mb-4 animate-pulse" size={48} />
                 <h3 className="text-lg font-semibold text-white">Visual Sitemap Canvas</h3>
                 <p className="text-sm text-dark-muted max-w-sm">
                   Interactive sitemap rendering node positions. Force-directed physics sitemap graph will be initialized here in the next step.
@@ -281,7 +281,7 @@ export default function App() {
           <div className="flex items-center gap-6">
             <span>Built with Node.js & React</span>
             <span>Grounding: Google Gemini</span>
-            <span className="text-brand-cyan">Phase: Day 1 (Setup Shell)</span>
+            <span className="text-brand-glow">Phase: Day 1 (Setup Shell)</span>
           </div>
         </div>
       </footer>
