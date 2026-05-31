@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Globe, 
-  Settings, 
-  Play, 
-  Loader2, 
-  CheckCircle, 
-  AlertTriangle, 
-  FileText, 
-  MessageSquare, 
-  HelpCircle, 
-  BarChart3, 
-  Sliders, 
+import {
+  Globe,
+  Settings,
+  Play,
+  Loader2,
+  CheckCircle,
+  AlertTriangle,
+  FileText,
+  MessageSquare,
+  HelpCircle,
+  BarChart3,
+  Sliders,
   Database,
   ArrowRight,
   RefreshCw,
@@ -27,7 +27,7 @@ export default function App() {
   const [isCrawling, setIsCrawling] = useState(false);
   const [crawlStatus, setCrawlStatus] = useState('idle'); // idle, crawling, success, error
   const [crawlMessage, setCrawlMessage] = useState('Console initialized. Enter target URL to begin indexing.');
-  
+
   // Scraper inputs
   const [targetUrl, setTargetUrl] = useState('');
   const [maxDepth, setMaxDepth] = useState(2);
@@ -41,7 +41,7 @@ export default function App() {
   // Visual sitemap states (nodes and edges for Canvas Graph)
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
-  
+
   const nodesRef = useRef([]);
   const edgesRef = useRef([]);
   const canvasRef = useRef(null);
@@ -81,7 +81,7 @@ export default function App() {
 
   const buildStaticGraph = (pagesList) => {
     if (!pagesList || pagesList.length === 0) return;
-    
+
     const width = 680;
     const height = 350;
 
@@ -100,11 +100,11 @@ export default function App() {
 
     pagesList.forEach((page, index) => {
       if (page.url === firstUrl) return;
-      
+
       const angle = (index / (pagesList.length || 1)) * Math.PI * 2;
       const radius = 80 + Math.random() * 40;
       const nodeId = page.id || `node-${index}`;
-      
+
       newNodes.push({
         id: nodeId,
         label: page.title || page.url.replace(origin, '') || '/',
@@ -160,16 +160,16 @@ export default function App() {
         for (let j = i + 1; j < currentNodes.length; j++) {
           const n1 = currentNodes[i];
           const n2 = currentNodes[j];
-          
+
           const dx = n2.x - n1.x;
           const dy = n2.y - n1.y;
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          
+
           if (dist < 120) {
             const force = (120 - dist) * 0.05;
             const fx = (dx / dist) * force;
             const fy = (dy / dist) * force;
-            
+
             if (!n1.isRoot && n1 !== dragNodeRef.current) {
               n1.x -= fx;
               n1.y -= fy;
@@ -186,18 +186,18 @@ export default function App() {
       currentEdges.forEach(edge => {
         const sourceNode = currentNodes.find(n => n.id === edge.source);
         const targetNode = currentNodes.find(n => n.id === edge.target);
-        
+
         if (sourceNode && targetNode) {
           const dx = targetNode.x - sourceNode.x;
           const dy = targetNode.y - sourceNode.y;
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
           const targetDist = 70;
-          
+
           if (dist > targetDist) {
             const force = (dist - targetDist) * 0.03;
             const fx = (dx / dist) * force;
             const fy = (dy / dist) * force;
-            
+
             if (!sourceNode.isRoot && sourceNode !== dragNodeRef.current) {
               sourceNode.x += fx;
               sourceNode.y += fy;
@@ -245,7 +245,7 @@ export default function App() {
       currentEdges.forEach(edge => {
         const sourceNode = currentNodes.find(n => n.id === edge.source);
         const targetNode = currentNodes.find(n => n.id === edge.target);
-        
+
         if (sourceNode && targetNode) {
           const grad = ctx.createLinearGradient(sourceNode.x, sourceNode.y, targetNode.x, targetNode.y);
           grad.addColorStop(0, '#dc2626'); // Crimson
@@ -264,10 +264,10 @@ export default function App() {
         ctx.beginPath();
         const radius = node.isRoot ? 14 : 9;
         ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-        
+
         let fillColor = '#d4d4d8'; // default zinc
         let shadowColor = 'rgba(0, 0, 0, 0.05)';
-        
+
         if (node.status === 'crawling') {
           fillColor = '#ef4444'; // Red
           shadowColor = 'rgba(239, 68, 68, 0.3)';
@@ -291,7 +291,7 @@ export default function App() {
         ctx.fillStyle = '#27272a'; // dark zinc text
         ctx.font = node.isRoot ? 'bold 11px Inter' : '10px Inter';
         ctx.textAlign = 'center';
-        
+
         const labelText = node.label.length > 20 ? node.label.substring(0, 18) + '...' : node.label;
         ctx.fillText(labelText, node.x, node.y - radius - 4);
       });
@@ -366,14 +366,14 @@ export default function App() {
       origin = targetUrl;
     }
 
-    const rootNode = { 
-      id: 'root', 
-      label: 'Ψ', 
-      x: 340, 
-      y: 175, 
-      isRoot: true, 
-      status: 'crawling', 
-      url: targetUrl 
+    const rootNode = {
+      id: 'root',
+      label: 'Ψ',
+      x: 340,
+      y: 175,
+      isRoot: true,
+      status: 'crawling',
+      url: targetUrl
     };
 
     setNodes([rootNode]);
@@ -390,7 +390,7 @@ export default function App() {
 
     eventSource.addEventListener('status', (event) => {
       const data = JSON.parse(event.data);
-      
+
       // Prepend timestamp to message
       const timeStr = new Date().toLocaleTimeString();
       setCrawlMessage(prev => prev + `\n[${timeStr}] ${data.message}`);
@@ -454,13 +454,13 @@ export default function App() {
         const matched = prevNodes.find(n => n.url === data.url);
         if (matched) {
           // Update the edges target ID from temporary to permanent ID
-          setEdges(prevEdges => prevEdges.map(edge => 
+          setEdges(prevEdges => prevEdges.map(edge =>
             edge.target === matched.id ? { ...edge, target: data.id, source: parentId } : edge
           ));
 
-          return prevNodes.map(n => 
-            n.url === data.url 
-              ? { ...n, id: data.id, label: data.title || data.url.replace(origin, '') || '/', status: 'success' } 
+          return prevNodes.map(n =>
+            n.url === data.url
+              ? { ...n, id: data.id, label: data.title || data.url.replace(origin, '') || '/', status: 'success' }
               : n
           );
         }
@@ -495,7 +495,7 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen bg-workspace-bg">
-      
+
       {/* Left Sidebar: Crimson & Obsidian Theme (Dark Side) */}
       <aside className="w-64 bg-sidebar-bg border-r border-sidebar-border flex flex-col shrink-0 text-sidebar-text">
         {/* Brand Logo */}
@@ -513,24 +513,22 @@ export default function App() {
         <nav className="flex-1 px-4 py-6 flex flex-col gap-1.5">
           <button
             onClick={() => setActiveTab('crawl')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-              activeTab === 'crawl' 
-                ? 'text-white bg-sidebar-hoverBg border-l-2 border-brand-primary' 
-                : 'hover:text-white hover:bg-sidebar-hoverBg/50'
-            }`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'crawl'
+              ? 'text-white bg-sidebar-hoverBg border-l-2 border-brand-primary'
+              : 'hover:text-white hover:bg-sidebar-hoverBg/50'
+              }`}
           >
             <Globe size={16} className={activeTab === 'crawl' ? 'text-brand-glow' : ''} />
             Crawl Control
             <ChevronRight size={14} className="ml-auto opacity-50" />
           </button>
-          
+
           <button
             onClick={() => setActiveTab('chunks')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-              activeTab === 'chunks' 
-                ? 'text-white bg-sidebar-hoverBg border-l-2 border-brand-primary' 
-                : 'hover:text-white hover:bg-sidebar-hoverBg/50'
-            }`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'chunks'
+              ? 'text-white bg-sidebar-hoverBg border-l-2 border-brand-primary'
+              : 'hover:text-white hover:bg-sidebar-hoverBg/50'
+              }`}
           >
             <Database size={16} className={activeTab === 'chunks' ? 'text-brand-glow' : ''} />
             Chunks Index
@@ -539,11 +537,10 @@ export default function App() {
 
           <button
             onClick={() => setActiveTab('chat')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-              activeTab === 'chat' 
-                ? 'text-white bg-sidebar-hoverBg border-l-2 border-brand-primary' 
-                : 'hover:text-white hover:bg-sidebar-hoverBg/50'
-            }`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'chat'
+              ? 'text-white bg-sidebar-hoverBg border-l-2 border-brand-primary'
+              : 'hover:text-white hover:bg-sidebar-hoverBg/50'
+              }`}
           >
             <MessageSquare size={16} className={activeTab === 'chat' ? 'text-brand-glow' : ''} />
             QA Chatbot
@@ -552,11 +549,10 @@ export default function App() {
 
           <button
             onClick={() => setActiveTab('summary')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-              activeTab === 'summary' 
-                ? 'text-white bg-sidebar-hoverBg border-l-2 border-brand-primary' 
-                : 'hover:text-white hover:bg-sidebar-hoverBg/50'
-            }`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'summary'
+              ? 'text-white bg-sidebar-hoverBg border-l-2 border-brand-primary'
+              : 'hover:text-white hover:bg-sidebar-hoverBg/50'
+              }`}
           >
             <FileText size={16} className={activeTab === 'summary' ? 'text-brand-glow' : ''} />
             Site Summaries
@@ -565,11 +561,10 @@ export default function App() {
 
           <button
             onClick={() => setActiveTab('analytics')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-              activeTab === 'analytics' 
-                ? 'text-white bg-sidebar-hoverBg border-l-2 border-brand-primary' 
-                : 'hover:text-white hover:bg-sidebar-hoverBg/50'
-            }`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'analytics'
+              ? 'text-white bg-sidebar-hoverBg border-l-2 border-brand-primary'
+              : 'hover:text-white hover:bg-sidebar-hoverBg/50'
+              }`}
           >
             <BarChart3 size={16} className={activeTab === 'analytics' ? 'text-brand-glow' : ''} />
             Analytics Info
@@ -586,7 +581,7 @@ export default function App() {
 
       {/* Right Content Space: Workspace (Bright Side) */}
       <main className="flex-grow min-h-screen workspace-grid flex flex-col text-workspace-text p-8 overflow-y-auto">
-        
+
         {/* Workspace Title bar */}
         <div className="flex items-center justify-between border-b border-workspace-border pb-5 mb-6">
           <div>
@@ -616,15 +611,15 @@ export default function App() {
         {/* TAB 1: CRAWL HUB */}
         {activeTab === 'crawl' && (
           <div className="flex flex-col gap-6">
-            
+
             {/* Custom Horizontal Crawl Panel (Replaces generic grid boxes) */}
             <div className="workspace-card p-6">
               <form onSubmit={handleStartCrawl} className="flex flex-col md:flex-row items-stretch md:items-end gap-5">
                 <div className="flex-1">
                   <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-2">Target Website URL</label>
                   <div className="relative">
-                    <input 
-                      type="url" 
+                    <input
+                      type="url"
                       placeholder="https://example.com/docs"
                       value={targetUrl}
                       onChange={(e) => setTargetUrl(e.target.value)}
@@ -638,7 +633,7 @@ export default function App() {
 
                 <div className="w-full md:w-36">
                   <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-2">Max Depth</label>
-                  <select 
+                  <select
                     value={maxDepth}
                     onChange={(e) => setMaxDepth(parseInt(e.target.value) || 2)}
                     disabled={isCrawling}
@@ -647,15 +642,17 @@ export default function App() {
                     <option value="1">1 (Direct Page)</option>
                     <option value="2">2 (Standard links)</option>
                     <option value="3">3 (Sub-folders)</option>
+                    <option value="4">4 (Sub-folders D4)</option>
+                    <option value="5">5 (Deep Crawl D5)</option>
                   </select>
                 </div>
 
                 <div className="w-full md:w-36">
                   <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-2">Page Limit</label>
-                  <input 
-                    type="number" 
-                    min="1" 
-                    max="50"
+                  <input
+                    type="number"
+                    min="1"
+                    max="250"
                     value={maxPages}
                     onChange={(e) => setMaxPages(parseInt(e.target.value) || 15)}
                     disabled={isCrawling}
@@ -664,8 +661,8 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-3 h-12">
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     id="domain"
                     checked={onlySameDomain}
                     onChange={(e) => setOnlySameDomain(e.target.checked)}
@@ -677,7 +674,7 @@ export default function App() {
                   </label>
                 </div>
 
-                <button 
+                <button
                   type="submit"
                   disabled={isCrawling || !targetUrl}
                   className="bg-brand-primary hover:bg-brand-accent text-white font-semibold py-3 px-8 rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-brand-primary/10 select-none text-sm shrink-0"
@@ -699,7 +696,7 @@ export default function App() {
 
             {/* Sitemap Graphic & Real-Time Console Terminal (Custom Dual Panels) */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
+
               {/* Graphic Sitemap */}
               <div className="lg:col-span-2 workspace-card p-6 flex flex-col gap-4">
                 <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
@@ -715,9 +712,9 @@ export default function App() {
 
                 {/* Graph Area */}
                 <div className="relative border border-zinc-200 bg-zinc-50/50 rounded-xl overflow-hidden min-h-[300px] flex items-center justify-center">
-                  <canvas 
-                    ref={canvasRef} 
-                    width={680} 
+                  <canvas
+                    ref={canvasRef}
+                    width={680}
                     height={350}
                     onMouseDown={handleMouseDown}
                     onMouseMove={handleMouseMove}
@@ -725,7 +722,7 @@ export default function App() {
                     onMouseLeave={handleMouseUp}
                     className="max-w-full cursor-grab active:cursor-grabbing block"
                   />
-                  
+
                   {nodes.length === 0 && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-zinc-50/80 backdrop-blur-[1px]">
                       <Globe className="text-zinc-300 animate-bounce" size={40} />
@@ -836,7 +833,7 @@ export default function App() {
               {activeTab === 'summary' && <FileText size={24} />}
               {activeTab === 'analytics' && <BarChart3 size={24} />}
             </div>
-            
+
             <div className="max-w-md">
               <h3 className="text-base font-bold text-zinc-800 mb-1">
                 {activeTab === 'chunks' && 'Day 2 integration: Semantic Chunker'}
