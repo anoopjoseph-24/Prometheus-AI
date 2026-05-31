@@ -110,22 +110,23 @@ async function scrapePage(url) {
 // Recursive crawler logic
 async function crawlUrl(startUrl, maxDepth = 2, maxPages = 15, onProgress) {
   const visited = new Set();
-  const queue = [{ url: startUrl, depth: 1 }];
+  const queue = [{ url: startUrl, depth: 1, parentUrl: null }];
   const crawledPages = [];
   const startHostname = new URL(startUrl).hostname;
 
   while (queue.length > 0 && crawledPages.length < maxPages) {
-    const { url, depth } = queue.shift();
+    const { url, depth, parentUrl } = queue.shift();
 
     if (visited.has(url)) continue;
     visited.add(url);
 
-    onProgress({ type: 'page_start', url, depth, count: crawledPages.length });
+    const parentId = parentUrl ? Buffer.from(parentUrl).toString('base64').substring(0, 16) : 'root';
+    onProgress({ type: 'page_start', url, depth, count: crawledPages.length, parentId });
 
     try {
       console.log(`Crawling: ${url} at depth ${depth}`);
       const data = await scrapePage(url);
-
+      
       const pageData = {
         id: Buffer.from(url).toString('base64').substring(0, 16),
         url,
@@ -137,7 +138,11 @@ async function crawlUrl(startUrl, maxDepth = 2, maxPages = 15, onProgress) {
       };
 
       crawledPages.push(pageData);
-      onProgress({ type: 'page_success', page: { url, title: data.title, wordCount: pageData.wordCount, id: pageData.id } });
+      onProgress({ 
+        type: 'page_success', 
+        page: { url, title: data.title, wordCount: pageData.wordCount, id: pageData.id },
+        parentId
+      });
 
       // If we haven't reached max depth, add same-origin links to the queue
       if (depth < maxDepth) {
@@ -151,7 +156,7 @@ async function crawlUrl(startUrl, maxDepth = 2, maxPages = 15, onProgress) {
 
             if (urlObj.hostname === startHostname && !visited.has(finalUrl) && isValidUrl(finalUrl)) {
               if (!queue.some(item => item.url === finalUrl)) {
-                queue.push({ url: finalUrl, depth: depth + 1 });
+                queue.push({ url: finalUrl, depth: depth + 1, parentUrl: url });
               }
             }
           } catch (e) {

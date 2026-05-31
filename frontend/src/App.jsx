@@ -20,6 +20,7 @@ import {
   Layers,
   ChevronRight
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('crawl');
@@ -332,22 +333,138 @@ export default function App() {
   const handleStartCrawl = (e) => {
     e.preventDefault();
     if (!targetUrl) return;
+
     setIsCrawling(true);
     setCrawlStatus('crawling');
-    setCrawlMessage(`[INFO] Resolving DNS for ${targetUrl}... \n[INFO] Starting crawler thread (Max depth: ${maxDepth}, Max pages: ${maxPages})...`);
-    
-    // Simulate a basic crawl start (will wire with SSE in Commit 8)
-    setTimeout(() => {
+    setCrawlMessage(`[INFO] Connecting to scraping endpoint for ${targetUrl}...\n`);
+    setPages([]);
+    setSelectedPage(null);
+
+    // Reset graph nodes to just the root node
+    let origin;
+    try {
+      origin = new URL(targetUrl).origin;
+    } catch {
+      origin = targetUrl;
+    }
+
+    const rootNode = { 
+      id: 'root', 
+      label: 'Ψ', 
+      x: 340, 
+      y: 175, 
+      isRoot: true, 
+      status: 'crawling', 
+      url: targetUrl 
+    };
+
+    setNodes([rootNode]);
+    setEdges([]);
+
+    // Open EventSource connection to backend SSE API
+    const urlParams = new URLSearchParams({
+      url: targetUrl,
+      depth: maxDepth,
+      maxPages: maxPages
+    });
+
+    const eventSource = new EventSource(`/api/crawl?${urlParams.toString()}`);
+
+    eventSource.addEventListener('status', (event) => {
+      const data = JSON.parse(event.data);
+      
+      // Prepend timestamp to message
+      const timeStr = new Date().toLocaleTimeString();
+      setCrawlMessage(prev => prev + `\n[${timeStr}] ${data.message}`);
+
+      if (data.type === 'success') {
+        setIsCrawling(false);
+        setCrawlStatus('success');
+        eventSource.close();
+
+        // Celebration Confetti
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.8 },
+          colors: ['#dc2626', '#18181b', '#10b981']
+        });
+
+        // Load the finalized pages list into sidebar
+        fetchStatus();
+      }
+    });
+
+    eventSource.addEventListener('page_start', (event) => {
+      const data = JSON.parse(event.data);
+      const timeStr = new Date().toLocaleTimeString();
+      setCrawlMessage(prev => prev + `\n[${timeStr}] Discovering: ${data.url}`);
+
+      // Add a crawling node to the canvas sitemap
+      setNodes(prevNodes => {
+        const exist = prevNodes.some(n => n.url === data.url);
+        if (exist) {
+          return prevNodes.map(n => n.url === data.url ? { ...n, status: 'crawling' } : n);
+        }
+
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 70 + Math.random() * 50;
+        const tempId = `temp-${Date.now()}-${Math.random()}`;
+
+        // Connect a link line from root to this new page
+        setEdges(prevEdges => [...prevEdges, { source: 'root', target: tempId }]);
+
+        return [...prevNodes, {
+          id: tempId,
+          label: data.url.replace(origin, '') || '/',
+          url: data.url,
+          x: 340 + Math.cos(angle) * radius,
+          y: 175 + Math.sin(angle) * radius,
+          status: 'crawling'
+        }];
+      });
+    });
+
+    eventSource.addEventListener('page_success', (event) => {
+      const data = JSON.parse(event.data).page;
+
+      // Update node from crawling to success (green)
+      setNodes(prevNodes => {
+        const matched = prevNodes.find(n => n.url === data.url);
+        if (matched) {
+          return prevNodes.map(n => 
+            n.url === data.url 
+              ? { ...n, id: data.id, label: data.title || data.url.replace(origin, '') || '/', status: 'success' } 
+              : n
+          );
+        }
+        return prevNodes;
+      });
+
+      // Append page details locally to update directory indices
+      setPages(prevPages => {
+        if (prevPages.some(p => p.url === data.url)) return prevPages;
+        return [...prevPages, data];
+      });
+    });
+
+    eventSource.addEventListener('page_error', (event) => {
+      const data = JSON.parse(event.data);
+      const timeStr = new Date().toLocaleTimeString();
+      setCrawlMessage(prev => prev + `\n[${timeStr}] [ERROR] Failed to fetch: ${data.url}`);
+
+      // Mark the node as failed (red)
+      setNodes(prevNodes => prevNodes.map(n => n.url === data.url ? { ...n, status: 'failed' } : n));
+    });
+
+    eventSource.onerror = (err) => {
+      console.error('SSE connection error:', err);
+      const timeStr = new Date().toLocaleTimeString();
+      setCrawlMessage(prev => prev + `\n[${timeStr}] [ERROR] Lost connection stream.`);
+      setCrawlStatus('error');
       setIsCrawling(false);
-      setCrawlStatus('success');
-      setCrawlMessage(`[SUCCESS] Crawl completed. Indexed 2 pages under domain.\n[INFO] Local database synced at backend/data/db.json.`);
-      const crawledData = [
-        { id: '1', url: targetUrl, title: 'Home Page', description: 'Starting page', content: 'This is main page content for the target website. It represents the structural index.', wordCount: 150 },
-        { id: '2', url: `${targetUrl}/about`, title: 'About Us', description: 'Company info', content: 'This is company information content and operational details.', wordCount: 220 }
-      ];
-      setPages(crawledData);
-      buildStaticGraph(crawledData);
-    }, 2000);
+      eventSource.close();
+    };
   };
 
   return (
