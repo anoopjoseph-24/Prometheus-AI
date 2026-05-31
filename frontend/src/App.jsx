@@ -115,8 +115,26 @@ export default function App() {
         wordCount: page.wordCount
       });
 
+      // Find the closest parent folder URL in pagesList
+      let parentNodeId = 'root';
+      try {
+        const urlObj = new URL(page.url);
+        const pathParts = urlObj.pathname.split('/').filter(Boolean);
+        if (pathParts.length > 1) {
+          pathParts.pop(); // Remove last segment to get parent path
+          const parentPath = '/' + pathParts.join('/');
+          const parentUrl = urlObj.origin + parentPath;
+          const parentPage = pagesList.find(p => p.url === parentUrl || p.url === parentUrl + '/');
+          if (parentPage) {
+            parentNodeId = parentPage.id;
+          }
+        }
+      } catch (e) {
+        // Fallback to root
+      }
+
       newEdges.push({
-        source: 'root',
+        source: parentNodeId,
         target: nodeId
       });
     });
@@ -411,8 +429,9 @@ export default function App() {
         const radius = 70 + Math.random() * 50;
         const tempId = `temp-${Date.now()}-${Math.random()}`;
 
-        // Connect a link line from root to this new page
-        setEdges(prevEdges => [...prevEdges, { source: 'root', target: tempId }]);
+        // Connect a link line from its actual parent to this new page
+        const parentId = data.parentId || 'root';
+        setEdges(prevEdges => [...prevEdges, { source: parentId, target: tempId }]);
 
         return [...prevNodes, {
           id: tempId,
@@ -426,12 +445,19 @@ export default function App() {
     });
 
     eventSource.addEventListener('page_success', (event) => {
-      const data = JSON.parse(event.data).page;
+      const eventData = JSON.parse(event.data);
+      const data = eventData.page;
+      const parentId = eventData.parentId || 'root';
 
       // Update node from crawling to success (green)
       setNodes(prevNodes => {
         const matched = prevNodes.find(n => n.url === data.url);
         if (matched) {
+          // Update the edges target ID from temporary to permanent ID
+          setEdges(prevEdges => prevEdges.map(edge => 
+            edge.target === matched.id ? { ...edge, target: data.id, source: parentId } : edge
+          ));
+
           return prevNodes.map(n => 
             n.url === data.url 
               ? { ...n, id: data.id, label: data.title || data.url.replace(origin, '') || '/', status: 'success' } 

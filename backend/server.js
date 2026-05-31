@@ -210,9 +210,9 @@ app.get('/api/crawl', async (req, res) => {
       crawlMaxPages,
       (progress) => {
         if (progress.type === 'page_start') {
-          sendEvent('page_start', { url: progress.url, depth: progress.depth, count: progress.count });
+          sendEvent('page_start', { url: progress.url, depth: progress.depth, count: progress.count, parentId: progress.parentId });
         } else if (progress.type === 'page_success') {
-          sendEvent('page_success', { page: progress.page });
+          sendEvent('page_success', { page: progress.page, parentId: progress.parentId });
         } else if (progress.type === 'page_error') {
           sendEvent('page_error', { url: progress.url, error: progress.error });
         }
