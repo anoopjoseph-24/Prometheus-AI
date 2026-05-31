@@ -5,6 +5,8 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const fs = require('fs');
 const path = require('path');
+const { chunkText } = require('./utils/chunker');
+const { generateEmbedding } = require('./utils/embeddings');
 
 dotenv.config();
 
@@ -219,15 +221,38 @@ app.get('/api/crawl', async (req, res) => {
       }
     );
 
+    // Now, chunk and generate embeddings for all pages!
+    sendEvent('status', { message: `Generating vector embeddings for crawled pages...`, type: 'info' });
+    
+    const dbChunks = [];
+    for (const page of crawledPages) {
+      const chunks = chunkText(page.content);
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        const embedding = await generateEmbedding(chunk.text);
+        
+        dbChunks.push({
+          id: `chunk_${page.id}_${i}`,
+          pageId: page.id,
+          url: page.url,
+          title: page.title,
+          text: chunk.text,
+          wordCount: chunk.wordCount,
+          charCount: chunk.charCount,
+          embedding: embedding
+        });
+      }
+    }
+
     // Save to db.json
     const db = readDB();
     db.pages = crawledPages;
-    db.chunks = []; // Clear old chunks
+    db.chunks = dbChunks;
     db.settings = { currentSite: url, crawledAt: new Date().toISOString() };
     writeDB(db);
 
     sendEvent('status', {
-      message: `Crawling completed. Processed ${crawledPages.length} pages.`,
+      message: `Crawling completed. Processed ${crawledPages.length} pages and generated ${dbChunks.length} text chunks.`,
       type: 'success',
       pagesCount: crawledPages.length
     });
@@ -243,6 +268,12 @@ app.get('/api/crawl', async (req, res) => {
 app.get('/api/pages', (req, res) => {
   const db = readDB();
   res.json({ pages: db.pages, settings: db.settings });
+});
+
+// Endpoint to retrieve chunks
+app.get('/api/chunks', (req, res) => {
+  const db = readDB();
+  res.json({ chunks: db.chunks || [] });
 });
 
 // Root status check
