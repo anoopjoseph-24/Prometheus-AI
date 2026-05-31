@@ -122,7 +122,7 @@ async function crawlUrl(startUrl, maxDepth = 2, maxPages = 15, onProgress) {
     if (visited.has(url)) continue;
     visited.add(url);
 
-    const parentId = parentUrl ? Buffer.from(parentUrl).toString('base64').substring(0, 16) : 'root';
+    const parentId = parentUrl ? Buffer.from(parentUrl).toString('base64').replace(/=/g, '') : 'root';
     onProgress({ type: 'page_start', url, depth, count: crawledPages.length, parentId });
 
     try {
@@ -130,7 +130,7 @@ async function crawlUrl(startUrl, maxDepth = 2, maxPages = 15, onProgress) {
       const data = await scrapePage(url);
       
       const pageData = {
-        id: Buffer.from(url).toString('base64').substring(0, 16),
+        id: Buffer.from(url).toString('base64').replace(/=/g, ''),
         url,
         title: data.title,
         description: data.description,

@@ -37,6 +37,8 @@ export default function App() {
   // Pages state
   const [pages, setPages] = useState([]);
   const [selectedPage, setSelectedPage] = useState(null);
+  const [chunks, setChunks] = useState([]);
+  const [selectedChunkPage, setSelectedChunkPage] = useState(null);
 
   // Visual sitemap states (nodes and edges for Canvas Graph)
   const [nodes, setNodes] = useState([]);
@@ -72,12 +74,34 @@ export default function App() {
           setCrawlStatus('success');
           setCrawlMessage(`[INFO] Loaded ${data.pages.length} documents from db.json.`);
           buildStaticGraph(data.pages);
+          setSelectedChunkPage(prev => prev || data.pages[0]);
         }
       }
+      await fetchChunks();
     } catch (err) {
       console.error('Failed to load local DB:', err);
     }
   };
+
+  const fetchChunks = async () => {
+    try {
+      const res = await fetch('/api/chunks');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.chunks) {
+          setChunks(data.chunks);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load chunks:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'chunks') {
+      fetchChunks();
+    }
+  }, [activeTab]);
 
   const buildStaticGraph = (pagesList) => {
     if (!pagesList || pagesList.length === 0) return;
@@ -824,11 +848,186 @@ export default function App() {
           </div>
         )}
 
-        {/* DAY 2-5 PLACEHOLDERS */}
-        {activeTab !== 'crawl' && (
+        {/* TAB 2: CHUNKS INDEX */}
+        {activeTab === 'chunks' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Panel: Pages List */}
+            <div className="lg:col-span-1 workspace-card p-5 flex flex-col gap-4">
+              <h3 className="text-sm font-bold text-zinc-800 border-b border-zinc-100 pb-3 flex items-center gap-2">
+                <FileText size={16} className="text-brand-primary" />
+                Select Ingested Document
+              </h3>
+              
+              {pages.length === 0 ? (
+                <div className="text-xs text-workspace-muted italic p-6 text-center">
+                  No pages crawled yet. Run the crawler to see text splits.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 overflow-y-auto max-h-[600px] pr-1">
+                  {pages.map((p) => {
+                    const pageChunks = chunks.filter(c => c.pageId === p.id);
+                    const isSelected = selectedChunkPage?.id === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => setSelectedChunkPage(p)}
+                        className={`w-full text-left p-3.5 rounded-xl border text-xs font-semibold transition-all ${
+                          isSelected
+                            ? 'bg-zinc-900 border-zinc-900 text-white shadow-md'
+                            : 'bg-white border-zinc-200 hover:border-zinc-300 text-zinc-800'
+                        }`}
+                      >
+                        <div className="truncate mb-1">{p.title}</div>
+                        <div className={`text-[10px] truncate ${isSelected ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                          {p.url}
+                        </div>
+                        <div className="flex items-center gap-2 mt-2 font-mono text-[9px]">
+                          <span className={`px-1.5 py-0.5 rounded ${isSelected ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-100 text-zinc-600'}`}>
+                            {pageChunks.length} Chunks
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded ${isSelected ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-100 text-zinc-600'}`}>
+                            {p.wordCount} Words
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Right Panel: Chunks View */}
+            <div className="lg:col-span-2 workspace-card p-5 flex flex-col gap-4">
+              <h3 className="text-sm font-bold text-zinc-800 border-b border-zinc-100 pb-3 flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Database size={16} className="text-brand-primary" />
+                  Semantic Segments
+                </span>
+              </h3>
+
+              {!selectedChunkPage ? (
+                <div className="flex-grow flex flex-col items-center justify-center text-center gap-3 p-12 text-workspace-muted italic text-xs min-h-[300px]">
+                  <Database className="text-zinc-300 animate-pulse" size={32} />
+                  Select a document from the left list to inspect its semantic segments.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {/* Summary Stats */}
+                  <div className="grid grid-cols-3 gap-4 bg-zinc-50 border border-zinc-200/60 rounded-xl p-3.5 text-center text-xs">
+                    <div>
+                      <span className="text-zinc-500 block mb-0.5 font-medium">Segments Generated</span>
+                      <strong className="text-zinc-800 text-sm font-bold font-mono">
+                        {chunks.filter(c => c.pageId === selectedChunkPage.id).length}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-zinc-500 block mb-0.5 font-medium">Target Chunk Size</span>
+                      <strong className="text-zinc-800 text-sm font-bold font-mono">600 Chars</strong>
+                    </div>
+                    <div>
+                      <span className="text-zinc-500 block mb-0.5 font-medium">Window Overlap</span>
+                      <strong className="text-zinc-800 text-sm font-bold font-mono">120 Chars</strong>
+                    </div>
+                  </div>
+
+                  {/* Chunks List */}
+                  <div className="flex flex-col gap-4 overflow-y-auto max-h-[500px] pr-1">
+                    {(() => {
+                      const pageChunks = chunks.filter(c => c.pageId === selectedChunkPage.id);
+                      if (pageChunks.length === 0) {
+                        return (
+                          <div className="text-xs text-workspace-muted italic p-6 text-center">
+                            No chunks generated for this page. (Try re-crawling with the embedding server online).
+                          </div>
+                        );
+                      }
+                      
+                      // Defined pastel accent colors for visual distinction
+                      const stripeColors = [
+                        'border-l-[#dc2626]', // Crimson
+                        'border-l-[#2563eb]', // Blue
+                        'border-l-[#059669]', // Emerald
+                        'border-l-[#d97706]', // Amber
+                        'border-l-[#7c3aed]', // Purple
+                        'border-l-[#db2777]', // Pink
+                      ];
+
+                      const bgColors = [
+                        'bg-red-50/20',
+                        'bg-blue-50/20',
+                        'bg-emerald-50/20',
+                        'bg-amber-50/20',
+                        'bg-purple-50/20',
+                        'bg-pink-50/20',
+                      ];
+
+                      return pageChunks.map((chunk, idx) => {
+                        const stripeColor = stripeColors[idx % stripeColors.length];
+                        const bgColor = bgColors[idx % bgColors.length];
+                        return (
+                          <div
+                            key={chunk.id || idx}
+                            className={`border border-zinc-200/80 rounded-xl p-4 transition-all hover:shadow-md border-l-4 ${stripeColor} ${bgColor}`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-bold text-zinc-800 uppercase tracking-wide">
+                                Segment #{idx + 1}
+                              </span>
+                              <div className="flex items-center gap-2 text-[9px] font-mono">
+                                <span className="bg-white border border-zinc-200 text-zinc-600 px-1.5 py-0.5 rounded">
+                                  Words: {chunk.wordCount}
+                                </span>
+                                <span className="bg-white border border-zinc-200 text-zinc-600 px-1.5 py-0.5 rounded">
+                                  Chars: {chunk.charCount}
+                                </span>
+                              </div>
+                            </div>
+                            
+                            <p className="text-xs text-zinc-700 leading-relaxed bg-white/70 border border-zinc-100 rounded-lg p-3 whitespace-pre-wrap font-sans">
+                              {chunk.text}
+                            </p>
+
+                            {/* Embeddings Matrix Details */}
+                            <div className="mt-3">
+                              <details className="group cursor-pointer select-none">
+                                <summary className="text-[10px] font-bold text-zinc-500 hover:text-zinc-800 flex items-center gap-1 list-none">
+                                  <ChevronRight size={12} className="transition-transform group-open:rotate-90" />
+                                  <span>Vector Embedding Preview (768-D Float Array)</span>
+                                </summary>
+                                <div className="mt-2 bg-[#09090b] border border-zinc-800 rounded-lg p-3 font-mono text-[9px] text-zinc-400 group-open:animate-fadeIn">
+                                  <div className="flex items-center justify-between mb-1.5 text-zinc-500 border-b border-zinc-800 pb-1">
+                                    <span>Dimensionality: 768 floats</span>
+                                  </div>
+                                  <div className="grid grid-cols-6 gap-1 max-h-24 overflow-y-auto pr-1 select-text">
+                                    {chunk.embedding?.slice(0, 36).map((val, vIdx) => (
+                                      <span key={vIdx} className="bg-zinc-900 border border-zinc-850 px-1 py-0.5 rounded text-center text-[9px] font-semibold text-emerald-400/90">
+                                        {val.toFixed(4)}
+                                      </span>
+                                    ))}
+                                    {chunk.embedding?.length > 36 && (
+                                      <span className="col-span-6 text-center text-zinc-600 font-bold py-1">
+                                        ... and {chunk.embedding.length - 36} more dimensions
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </details>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* DAY 3-5 PLACEHOLDERS */}
+        {activeTab !== 'crawl' && activeTab !== 'chunks' && (
           <div className="workspace-card p-12 flex flex-col items-center justify-center text-center gap-5 min-h-[400px]">
             <div className="w-14 h-14 rounded-xl bg-brand-primary/5 border border-brand-primary/10 flex items-center justify-center text-brand-glow animate-pulse">
-              {activeTab === 'chunks' && <Database size={24} />}
               {activeTab === 'chat' && <MessageSquare size={24} />}
               {activeTab === 'summary' && <FileText size={24} />}
               {activeTab === 'analytics' && <BarChart3 size={24} />}
@@ -836,7 +1035,6 @@ export default function App() {
 
             <div className="max-w-md">
               <h3 className="text-base font-bold text-zinc-800 mb-1">
-                {activeTab === 'chunks' && 'Day 2 integration: Semantic Chunker'}
                 {activeTab === 'chat' && 'Day 3 integration: RAG Conversational Engine'}
                 {activeTab === 'summary' && 'Day 4 integration: Summarizer'}
                 {activeTab === 'analytics' && 'Day 5 integration: Operation Charts'}
