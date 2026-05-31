@@ -799,7 +799,6 @@ export default function App() {
                       <tr className="border-b border-zinc-200 text-zinc-500 font-bold uppercase text-[10px] tracking-wider">
                         <th className="pb-3">Title / Path</th>
                         <th className="pb-3">URL Link</th>
-                        <th className="pb-3">Index ID</th>
                         <th className="pb-3 text-right">Words</th>
                         <th className="pb-3 text-right">Action</th>
                       </tr>
@@ -809,11 +808,13 @@ export default function App() {
                         <tr key={page.id || index} className="hover:bg-zinc-50/50">
                           <td className="py-4 font-bold text-zinc-800">{page.title}</td>
                           <td className="py-4 text-workspace-muted truncate max-w-xs">{page.url}</td>
-                          <td className="py-4 font-mono text-zinc-500">{page.id}</td>
                           <td className="py-4 text-right font-mono">{page.wordCount}</td>
                           <td className="py-4 text-right">
                             <button
-                              onClick={() => setSelectedPage(page)}
+                              onClick={() => {
+                                setSelectedChunkPage(page);
+                                setActiveTab('chunks');
+                              }}
                               className="text-brand-primary hover:text-brand-accent hover:underline flex items-center gap-1 ml-auto text-[11px]"
                             >
                               Inspect <ArrowRight size={12} />
@@ -826,24 +827,6 @@ export default function App() {
                 </div>
               )}
             </div>
-
-            {/* Inspect Panel */}
-            {selectedPage && (
-              <div className="workspace-card p-6 flex flex-col gap-4 animate-fadeIn">
-                <h3 className="text-sm font-bold text-zinc-800 border-b border-zinc-100 pb-3 flex items-center justify-between">
-                  <span>Document Details: {selectedPage.title}</span>
-                  <a href={selectedPage.url} target="_blank" rel="noopener noreferrer" className="text-xs text-brand-glow hover:underline flex items-center gap-1">
-                    Visit page <ExternalLink size={12} />
-                  </a>
-                </h3>
-
-                <div className="flex flex-col gap-4 text-xs text-zinc-700">
-                  <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 leading-relaxed font-sans max-h-56 overflow-y-auto whitespace-pre-line text-zinc-600">
-                    {selectedPage.content}
-                  </div>
-                </div>
-              </div>
-            )}
 
           </div>
         )}
