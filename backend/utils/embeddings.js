@@ -118,7 +118,7 @@ async function generateEmbeddingsBatch(texts) {
       
       let success = false;
       let retries = 3;
-      let delay = 5000; // start with 5 seconds wait on rate limit
+      let delay = 60000; // wait 60 seconds for the minute quota to reset
       
       while (!success && retries > 0) {
         try {
@@ -135,7 +135,7 @@ async function generateEmbeddingsBatch(texts) {
           if (errMsg.includes('429') || errMsg.includes('Quota exceeded') || errMsg.includes('Too Many Requests')) {
             retries--;
             if (retries > 0) {
-              console.warn(`[WARN] Embedding rate limit hit (429). Retrying in ${delay / 1000}s... (${retries} retries left)`);
+              console.warn(`[WARN] Embedding rate limit hit (429). Waiting ${delay / 1000}s for quota reset... (${retries} retries left)`);
               await sleep(delay);
               delay *= 1.5; // exponential backoff
             } else {

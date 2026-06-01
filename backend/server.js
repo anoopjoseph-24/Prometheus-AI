@@ -364,6 +364,26 @@ function cosineSimilarity(vecA, vecB) {
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
+// Keyword similarity fallback when offline/mock embeddings are active
+function getKeywordScore(query, text) {
+  const clean = (str) => str.toLowerCase().replace(/[^\w\s]/g, '');
+  const queryWords = clean(query).split(/\s+/).filter(w => w.length > 2);
+  if (queryWords.length === 0) return 0;
+  
+  const textCleaned = clean(text);
+  let score = 0;
+  queryWords.forEach(word => {
+    // If it matches exactly as a standalone word, higher weight
+    const wordPattern = new RegExp(`\\b${word}\\b`, 'i');
+    if (wordPattern.test(textCleaned)) {
+      score += 1.0;
+    } else if (textCleaned.includes(word)) {
+      score += 0.5; // partial match inside another word
+    }
+  });
+  return score / queryWords.length;
+}
+
 // Chat / Q&A endpoint
 app.post('/api/chat', async (req, res) => {
   const { query } = req.body;
@@ -389,13 +409,16 @@ app.post('/api/chat', async (req, res) => {
 
     // 2. Compute similarity for each chunk
     const scoredChunks = chunks.map((chunk) => {
-      const similarity = cosineSimilarity(queryEmbedding, chunk.embedding);
+      const similarity = useMock 
+        ? getKeywordScore(query, chunk.text) 
+        : cosineSimilarity(queryEmbedding, chunk.embedding);
       return { ...chunk, similarity };
     });
 
     // 3. Sort by similarity desc and select top-5
     scoredChunks.sort((a, b) => b.similarity - a.similarity);
-    const topChunks = scoredChunks.slice(0, 5).filter(c => c.similarity > 0.15);
+    const threshold = useMock ? 0.05 : 0.15;
+    const topChunks = scoredChunks.slice(0, 5).filter(c => c.similarity > threshold);
 
     // Fallback if none matches threshold
     const relevantChunks = topChunks.length > 0 ? topChunks : scoredChunks.slice(0, 3);
