@@ -501,6 +501,10 @@ export default function App() {
 
         // Load the finalized pages list into sidebar
         fetchStatus();
+      } else if (data.type === 'error') {
+        setIsCrawling(false);
+        setCrawlStatus('error');
+        eventSource.close();
       }
     });
 

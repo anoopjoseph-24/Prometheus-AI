@@ -1,12 +1,24 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const path = require('path');
 const dotenv = require('dotenv');
 
-dotenv.config();
+// Load environment variables using absolute path relative to this script
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
-const apiKey = process.env.GEMINI_API_KEY;
-let genAI = null;
-if (apiKey) {
-  genAI = new GoogleGenerativeAI(apiKey);
+/**
+ * Gets the current API key from environment variables.
+ */
+function getApiKey() {
+  return process.env.GEMINI_API_KEY;
+}
+
+/**
+ * Gets a fresh or cached GoogleGenerativeAI instance.
+ */
+function getGenAI() {
+  const apiKey = getApiKey();
+  if (!apiKey) return null;
+  return new GoogleGenerativeAI(apiKey);
 }
 
 /**
@@ -47,12 +59,14 @@ Citations and sources consulted: ${citationsList}.
  * Context-grounded Gemini prompt execution using gemini-flash-latest
  */
 async function answerQuestionWithContext(query, contextChunks) {
+  const apiKey = getApiKey();
   if (!apiKey) {
     return generateOfflineResponse(query, contextChunks, true);
   }
 
+  const genAI = getGenAI();
   if (!genAI) {
-    genAI = new GoogleGenerativeAI(apiKey);
+    return generateOfflineResponse(query, contextChunks, true);
   }
 
   try {

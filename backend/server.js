@@ -1,15 +1,17 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const dotenv = require('dotenv');
+
+// Load environment variables immediately relative to this script
+dotenv.config({ path: path.join(__dirname, '.env') });
+
 const axios = require('axios');
 const cheerio = require('cheerio');
 const fs = require('fs');
-const path = require('path');
 const { chunkText } = require('./utils/chunker');
-const { generateEmbedding } = require('./utils/embeddings');
+const { generateEmbedding, generateEmbeddingsBatch } = require('./utils/embeddings');
 const { answerQuestionWithContext } = require('./utils/chat');
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -73,7 +75,7 @@ async function scrapePage(url) {
   try {
     const response = await axios.get(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, Gecko) Chrome/91.0.4472.124 Safari/537.36'
       },
       timeout: 5000
     });
@@ -222,28 +224,46 @@ app.get('/api/crawl', async (req, res) => {
       }
     );
 
+    // Safeguard to prevent wiping existing DB when crawl fails completely
+    if (!crawledPages || crawledPages.length === 0) {
+      throw new Error('No pages were successfully crawled. Please verify the URL and check if the site allows scraping.');
+    }
+
     // Now, chunk and generate embeddings for all pages!
-    sendEvent('status', { message: `Generating vector embeddings for crawled pages...`, type: 'info' });
+    sendEvent('status', { message: `Preparing text chunks for vector embeddings...`, type: 'info' });
     
-    const dbChunks = [];
+    // First, segment all pages into chunks
+    const chunkInputs = [];
     for (const page of crawledPages) {
-      const chunks = chunkText(page.content);
-      for (let i = 0; i < chunks.length; i++) {
-        const chunk = chunks[i];
-        const embedding = await generateEmbedding(chunk.text);
-        
-        dbChunks.push({
-          id: `chunk_${page.id}_${i}`,
-          pageId: page.id,
-          url: page.url,
-          title: page.title,
+      const pageChunks = chunkText(page.content);
+      pageChunks.forEach((chunk, i) => {
+        chunkInputs.push({
+          page,
           text: chunk.text,
           wordCount: chunk.wordCount,
           charCount: chunk.charCount,
-          embedding: embedding
+          index: i
         });
-      }
+      });
     }
+
+    sendEvent('status', { message: `Generating vector embeddings for ${chunkInputs.length} text chunks...`, type: 'info' });
+
+    // Call batched embedding API
+    const textsToEmbed = chunkInputs.map(item => item.text);
+    const embeddings = await generateEmbeddingsBatch(textsToEmbed);
+
+    // Map embeddings back to chunks
+    const dbChunks = chunkInputs.map((item, idx) => ({
+      id: `chunk_${item.page.id}_${item.index}`,
+      pageId: item.page.id,
+      url: item.page.url,
+      title: item.page.title,
+      text: item.text,
+      wordCount: item.wordCount,
+      charCount: item.charCount,
+      embedding: embeddings[idx]
+    }));
 
     // Save to db.json
     const db = readDB();
