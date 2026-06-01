@@ -32,10 +32,10 @@ function generateMockEmbedding(text) {
 }
 
 /**
- * Calls Gemini text-embedding-004 to create a vector embedding for a given text chunk.
+ * Calls Gemini gemini-embedding-2 to create a vector embedding for a given text chunk.
  * Falls back to offline mock embeddings if no API key is provided.
  * @param {string} text The text content to encode
- * @returns {Promise<number[]>} Array of 768 floating point numbers representing the vector
+ * @returns {Promise<number[]>} Array of floating point numbers representing the vector
  */
 async function generateEmbedding(text) {
   if (!apiKey) {
@@ -48,7 +48,7 @@ async function generateEmbedding(text) {
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'text-embedding-004' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-embedding-2' });
     const result = await model.embedContent(text);
     
     if (result && result.embedding && result.embedding.values) {

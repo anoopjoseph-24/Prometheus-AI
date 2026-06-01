@@ -40,6 +40,18 @@ export default function App() {
   const [chunks, setChunks] = useState([]);
   const [selectedChunkPage, setSelectedChunkPage] = useState(null);
 
+  // Chat state
+  const [chatMessages, setChatMessages] = useState([
+    {
+      sender: 'bot',
+      text: 'Hello! I am Prometheus AI. I have indexed the crawled pages and am ready to answer questions grounded in the content. Ask me anything!',
+      timestamp: new Date().toLocaleTimeString(),
+      sources: []
+    }
+  ]);
+  const [chatQuery, setChatQuery] = useState('');
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+
   // Visual sitemap states (nodes and edges for Canvas Graph)
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
@@ -102,6 +114,61 @@ export default function App() {
       fetchChunks();
     }
   }, [activeTab]);
+
+  const handleSendMessage = async (e, directText = null) => {
+    if (e) e.preventDefault();
+    const messageText = directText || chatQuery;
+    if (!messageText.trim() || isSendingMessage) return;
+
+    const userMsg = {
+      sender: 'user',
+      text: messageText,
+      timestamp: new Date().toLocaleTimeString(),
+      sources: []
+    };
+
+    setChatMessages(prev => [...prev, userMsg]);
+    if (!directText) setChatQuery('');
+    setIsSendingMessage(true);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query: messageText })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setChatMessages(prev => [...prev, {
+          sender: 'bot',
+          text: data.answer,
+          timestamp: new Date().toLocaleTimeString(),
+          sources: data.sources || []
+        }]);
+      } else {
+        const errorData = await response.json();
+        setChatMessages(prev => [...prev, {
+          sender: 'bot',
+          text: `[ERROR] Failed to obtain grounded completion: ${errorData.error || 'Server error'}`,
+          timestamp: new Date().toLocaleTimeString(),
+          sources: []
+        }]);
+      }
+    } catch (err) {
+      console.error('Chat error:', err);
+      setChatMessages(prev => [...prev, {
+        sender: 'bot',
+        text: `[ERROR] Network issue occurred while communicating with the server: ${err.message}`,
+        timestamp: new Date().toLocaleTimeString(),
+        sources: []
+      }]);
+    } finally {
+      setIsSendingMessage(false);
+    }
+  };
 
   const buildStaticGraph = (pagesList) => {
     if (!pagesList || pagesList.length === 0) return;
@@ -975,11 +1042,11 @@ export default function App() {
                               <details className="group cursor-pointer select-none">
                                 <summary className="text-[10px] font-bold text-zinc-500 hover:text-zinc-800 flex items-center gap-1 list-none">
                                   <ChevronRight size={12} className="transition-transform group-open:rotate-90" />
-                                  <span>Vector Embedding Preview (768-D Float Array)</span>
+                                  <span>Vector Embedding Preview ({chunk.embedding?.length || 768}-D Float Array)</span>
                                 </summary>
                                 <div className="mt-2 bg-[#09090b] border border-zinc-800 rounded-lg p-3 font-mono text-[9px] text-zinc-400 group-open:animate-fadeIn">
                                   <div className="flex items-center justify-between mb-1.5 text-zinc-500 border-b border-zinc-800 pb-1">
-                                    <span>Dimensionality: 768 floats</span>
+                                    <span>Dimensionality: {chunk.embedding?.length || 768} floats</span>
                                   </div>
                                   <div className="grid grid-cols-6 gap-1 max-h-24 overflow-y-auto pr-1 select-text">
                                     {chunk.embedding?.slice(0, 36).map((val, vIdx) => (
@@ -1007,18 +1074,201 @@ export default function App() {
           </div>
         )}
 
-        {/* DAY 3-5 PLACEHOLDERS */}
-        {activeTab !== 'crawl' && activeTab !== 'chunks' && (
+        {/* TAB 3: QA CHATBOT */}
+        {activeTab === 'chat' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-grow">
+            {/* Left/Middle Column: Message logs and Input */}
+            <div className="lg:col-span-2 workspace-card p-5 flex flex-col justify-between min-h-[500px]">
+              <div className="flex flex-col gap-4 flex-grow overflow-hidden">
+                <h3 className="text-sm font-bold text-zinc-800 border-b border-zinc-100 pb-3 flex items-center gap-2">
+                  <MessageSquare size={16} className="text-brand-primary" />
+                  Conversational RAG Auditor
+                </h3>
+
+                {/* Message Log */}
+                <div className="flex-grow overflow-y-auto max-h-[380px] flex flex-col gap-3.5 pr-1 py-1">
+                  {chatMessages.map((msg, index) => {
+                    const isBot = msg.sender === 'bot';
+                    return (
+                      <div
+                        key={index}
+                        className={`flex flex-col max-w-[85%] ${
+                          isBot ? 'self-start' : 'self-end items-end'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] font-bold text-zinc-500">
+                            {isBot ? 'Prometheus AI' : 'Auditor / User'}
+                          </span>
+                          <span className="text-[9px] text-zinc-400">{msg.timestamp}</span>
+                        </div>
+                        <div
+                          className={`rounded-2xl px-4 py-3 text-xs leading-relaxed ${
+                            isBot
+                              ? 'bg-white border border-zinc-200 text-zinc-800 shadow-sm'
+                              : 'bg-zinc-900 text-zinc-100 shadow-md font-medium'
+                          }`}
+                        >
+                          <p className="whitespace-pre-wrap">{msg.text}</p>
+                          {isBot && msg.sources?.length > 0 && (
+                            <div className="mt-2.5 pt-2 border-t border-zinc-100 flex flex-wrap gap-1.5">
+                              <span className="text-[9px] text-zinc-400 font-bold block w-full mb-1">Retrieved Sources:</span>
+                              {msg.sources.map((src, sIdx) => (
+                                <span
+                                  key={sIdx}
+                                  className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-brand-primary text-[9px] font-bold"
+                                >
+                                  Source #{sIdx + 1}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {isSendingMessage && (
+                    <div className="self-start flex flex-col max-w-[80%]">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-bold text-zinc-500">Prometheus AI</span>
+                        <span className="text-[9px] text-zinc-400">thinking...</span>
+                      </div>
+                      <div className="bg-white border border-zinc-200 text-zinc-800 rounded-2xl px-4 py-3 text-xs shadow-sm flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-bounce"></span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-bounce delay-100"></span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-bounce delay-200"></span>
+                        <span className="text-[11px] text-zinc-500 font-medium">Retrieving vectors & synthesizing response...</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Suggestions and Form Input */}
+              <div className="border-t border-zinc-100 pt-4 mt-4">
+                {/* Quick Prompts */}
+                {pages.length > 0 && (
+                  <div className="mb-3.5 flex flex-col gap-1.5">
+                    <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Suggested Queries</span>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={(e) => handleSendMessage(e, 'What is the main topic of this website?')}
+                        disabled={isSendingMessage}
+                        className="text-[10px] bg-zinc-50 border border-zinc-200 hover:border-zinc-300 text-zinc-700 px-3 py-1.5 rounded-xl font-semibold transition-all disabled:opacity-50"
+                      >
+                        What is this website about?
+                      </button>
+                      <button
+                        onClick={(e) => handleSendMessage(e, 'Provide a bulleted list of key features or products.')}
+                        disabled={isSendingMessage}
+                        className="text-[10px] bg-zinc-50 border border-zinc-200 hover:border-zinc-300 text-zinc-700 px-3 py-1.5 rounded-xl font-semibold transition-all disabled:opacity-50"
+                      >
+                        List key features
+                      </button>
+                      <button
+                        onClick={(e) => handleSendMessage(e, 'Are there any contact details, emails, or address information?')}
+                        disabled={isSendingMessage}
+                        className="text-[10px] bg-zinc-50 border border-zinc-200 hover:border-zinc-300 text-zinc-700 px-3 py-1.5 rounded-xl font-semibold transition-all disabled:opacity-50"
+                      >
+                        Find contact details
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <form onSubmit={handleSendMessage} className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder={pages.length === 0 ? "Please index a website first..." : "Ask a question about the ingested site..."}
+                    value={chatQuery}
+                    onChange={(e) => setChatQuery(e.target.value)}
+                    disabled={isSendingMessage || pages.length === 0}
+                    className="flex-grow bg-zinc-50 border border-workspace-border focus:border-brand-primary focus:bg-white rounded-xl px-4 py-3 text-xs focus:outline-none text-zinc-900 transition-all font-medium disabled:opacity-60"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSendingMessage || !chatQuery.trim() || pages.length === 0}
+                    className="bg-brand-primary hover:bg-brand-accent text-white font-semibold py-3 px-5 rounded-xl flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs shadow-md shadow-brand-primary/10 select-none shrink-0"
+                  >
+                    Send Query
+                    <ArrowRight size={14} />
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            {/* Right Column: Grounding Citation Audits */}
+            <div className="lg:col-span-1 workspace-card p-5 flex flex-col gap-4">
+              <h3 className="text-sm font-bold text-zinc-800 border-b border-zinc-100 pb-3 flex items-center gap-2">
+                <Database size={16} className="text-brand-primary" />
+                Active Retrieval Context
+              </h3>
+
+              {(() => {
+                const botMsgs = chatMessages.filter(m => m.sender === 'bot' && m.sources?.length > 0);
+                if (botMsgs.length === 0) {
+                  return (
+                    <div className="flex-grow flex flex-col items-center justify-center text-center gap-2 p-12 text-workspace-muted italic text-[11px]">
+                      <Info size={24} className="text-zinc-300" />
+                      When you send a message, the retrieved vectors and similarity scores will populate here.
+                    </div>
+                  );
+                }
+
+                const lastMsg = botMsgs[botMsgs.length - 1];
+                return (
+                  <div className="flex flex-col gap-4 overflow-y-auto max-h-[460px] pr-1">
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">
+                      Retrieved {lastMsg.sources.length} matching segments:
+                    </span>
+                    {lastMsg.sources.map((src, idx) => {
+                      const pct = Math.round((src.similarity || 0) * 100);
+                      return (
+                        <div key={src.id || idx} className="border border-zinc-200 bg-zinc-50/50 rounded-xl p-3.5 flex flex-col gap-2 transition-all hover:border-zinc-350">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-brand-primary text-[10px] uppercase tracking-wide">
+                              Source #{idx + 1}
+                            </span>
+                            <span className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] font-bold px-1.5 py-0.5 rounded font-mono">
+                              {pct > 0 ? `${pct}% Match` : 'N/A similarity'}
+                            </span>
+                          </div>
+                          <div className="text-[11px] font-bold text-zinc-850 truncate">
+                            {src.title}
+                          </div>
+                          <a
+                            href={src.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-workspace-muted hover:text-brand-primary truncate hover:underline flex items-center gap-0.5"
+                          >
+                            {src.url}
+                            <ExternalLink size={10} />
+                          </a>
+                          <div className="text-[10px] text-zinc-650 bg-white border border-zinc-150 rounded-lg p-2.5 leading-relaxed font-sans max-h-28 overflow-y-auto select-text">
+                            "{src.text}"
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* DAY 4-5 PLACEHOLDERS */}
+        {activeTab !== 'crawl' && activeTab !== 'chunks' && activeTab !== 'chat' && (
           <div className="workspace-card p-12 flex flex-col items-center justify-center text-center gap-5 min-h-[400px]">
             <div className="w-14 h-14 rounded-xl bg-brand-primary/5 border border-brand-primary/10 flex items-center justify-center text-brand-glow animate-pulse">
-              {activeTab === 'chat' && <MessageSquare size={24} />}
               {activeTab === 'summary' && <FileText size={24} />}
               {activeTab === 'analytics' && <BarChart3 size={24} />}
             </div>
 
             <div className="max-w-md">
               <h3 className="text-base font-bold text-zinc-800 mb-1">
-                {activeTab === 'chat' && 'Day 3 integration: RAG Conversational Engine'}
                 {activeTab === 'summary' && 'Day 4 integration: Summarizer'}
                 {activeTab === 'analytics' && 'Day 5 integration: Operation Charts'}
               </h3>
