@@ -1,6 +1,7 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const path = require('path');
 const dotenv = require('dotenv');
+const axios = require('axios');
 
 // Load environment variables using absolute path relative to this script
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
@@ -56,9 +57,57 @@ Citations and sources consulted: ${citationsList}.
 }
 
 /**
- * Context-grounded Gemini prompt execution using gemini-flash-latest
+ * Context-grounded Gemini or Groq prompt execution
  */
 async function answerQuestionWithContext(query, contextChunks) {
+  const groqApiKey = process.env.GROQ_API_KEY;
+  
+  if (groqApiKey && groqApiKey.trim().length > 0) {
+    try {
+      console.log('Querying Groq API for chat completion...');
+      
+      const contextText = contextChunks
+        .map((c, idx) => `[Source ${idx + 1}]\nURL: ${c.url}\nTitle: ${c.title}\nContent: ${c.text}`)
+        .join('\n\n---\n\n');
+
+      const response = await axios.post(
+        'https://api.groq.com/openai/v1/chat/completions',
+        {
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are Prometheus AI, a RAG assistant. You must ONLY answer questions based on the provided Context. If the answer cannot be found in the context, politely state that you do not know. Never mention "Antigravity". Always cite your sources using [Source X] notation where X corresponds to the source index number.'
+            },
+            {
+              role: 'user',
+              content: `Context:\n${contextText}\n\nQuestion: ${query}\n\nAnswer:`
+            }
+          ],
+          temperature: 0.2
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${groqApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000
+        }
+      );
+
+      if (response.data && response.data.choices && response.data.choices[0]) {
+        console.log('✅ Chat generated successfully via Groq!');
+        return response.data.choices[0].message.content;
+      } else {
+        throw new Error('Invalid response structure from Groq API');
+      }
+    } catch (error) {
+      console.error('Error querying Groq API:', error.message);
+      console.warn('[WARN] Falling back to Gemini chat API due to Groq error.');
+    }
+  }
+
+  // Gemini logic fallback
   const apiKey = getApiKey();
   if (!apiKey) {
     return generateOfflineResponse(query, contextChunks, true);
