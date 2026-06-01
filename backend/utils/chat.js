@@ -69,24 +69,43 @@ async function answerQuestionWithContext(query, contextChunks) {
     return generateOfflineResponse(query, contextChunks, true);
   }
 
-  try {
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-flash-latest',
-      systemInstruction: 'You are Prometheus AI, a RAG assistant. You must ONLY answer questions based on the provided Context. If the answer cannot be found in the context, politely state that you do not know. Never mention "Antigravity". Always cite your sources using [Source X] notation where X corresponds to the source index number.'
-    });
+  let retries = 2;
+  let delay = 2000;
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-    const contextText = contextChunks
-      .map((c, idx) => `[Source ${idx + 1}]\nURL: ${c.url}\nTitle: ${c.title}\nContent: ${c.text}`)
-      .join('\n\n---\n\n');
+  while (retries > 0) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-flash-latest',
+        systemInstruction: 'You are Prometheus AI, a RAG assistant. You must ONLY answer questions based on the provided Context. If the answer cannot be found in the context, politely state that you do not know. Never mention "Antigravity". Always cite your sources using [Source X] notation where X corresponds to the source index number.'
+      });
 
-    const prompt = `Context:\n${contextText}\n\nQuestion: ${query}\n\nAnswer:`;
+      const contextText = contextChunks
+        .map((c, idx) => `[Source ${idx + 1}]\nURL: ${c.url}\nTitle: ${c.title}\nContent: ${c.text}`)
+        .join('\n\n---\n\n');
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text();
-  } catch (error) {
-    console.error('Error generating chat completion:', error.message);
-    return `[API ERROR] Failed to query Gemini model. Falling back to retrieved context:\n\n` + generateOfflineResponse(query, contextChunks, false);
+      const prompt = `Context:\n${contextText}\n\nQuestion: ${query}\n\nAnswer:`;
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      return response.text();
+    } catch (error) {
+      const errMsg = error.message || '';
+      if (errMsg.includes('429') || errMsg.includes('Quota exceeded') || errMsg.includes('Too Many Requests')) {
+        retries--;
+        if (retries > 0) {
+          console.warn(`[WARN] Chat generation rate limit hit. Retrying in ${delay / 1000}s...`);
+          await sleep(delay);
+          delay *= 1.5;
+        } else {
+          console.error('Error generating chat completion:', error.message);
+          return `[API ERROR] Failed to query Gemini model. Falling back to retrieved context:\n\n` + generateOfflineResponse(query, contextChunks, false);
+        }
+      } else {
+        console.error('Error generating chat completion:', error.message);
+        return `[API ERROR] Failed to query Gemini model. Falling back to retrieved context:\n\n` + generateOfflineResponse(query, contextChunks, false);
+      }
+    }
   }
 }
 
