@@ -16,10 +16,10 @@ function generateOfflineResponse(query, chunks) {
   if (chunks.length === 0) {
     return "I couldn't find any relevant information in the crawled pages to answer your question. Please try crawling a different site or asking something else.";
   }
-  
+
   const bestMatch = chunks[0];
   const citationsList = chunks.map((c, idx) => `[Source ${idx + 1}] (${c.url})`).join(', ');
-  
+
   return `[OFFLINE DEMO MODE - GEMINI_API_KEY NOT CONFIGURED]
 
 Based on the crawled pages, here is the most relevant section retrieved regarding "${query}":
@@ -44,7 +44,7 @@ async function answerQuestionWithContext(query, contextChunks) {
   }
 
   try {
-    const model = genAI.getGenerativeModel({ 
+    const model = genAI.getGenerativeModel({
       model: 'gemini-1.5-flash',
       systemInstruction: 'You are Prometheus AI, a RAG assistant. You must ONLY answer questions based on the provided Context. If the answer cannot be found in the context, politely state that you do not know. Never mention "Antigravity". Always cite your sources using [Source X] notation where X corresponds to the source index number.'
     });
@@ -54,7 +54,7 @@ async function answerQuestionWithContext(query, contextChunks) {
       .join('\n\n---\n\n');
 
     const prompt = `Context:\n${contextText}\n\nQuestion: ${query}\n\nAnswer:`;
-    
+
     const result = await model.generateContent(prompt);
     const response = await result.response;
     return response.text();
