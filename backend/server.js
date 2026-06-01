@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { chunkText } = require('./utils/chunker');
 const { generateEmbedding } = require('./utils/embeddings');
+const { answerQuestionWithContext } = require('./utils/chat');
 
 dotenv.config();
 
@@ -274,6 +275,78 @@ app.get('/api/pages', (req, res) => {
 app.get('/api/chunks', (req, res) => {
   const db = readDB();
   res.json({ chunks: db.chunks || [] });
+});
+
+// Cosine similarity helper
+function cosineSimilarity(vecA, vecB) {
+  if (!vecA || !vecB || vecA.length !== vecB.length) return 0;
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < vecA.length; i++) {
+    dotProduct += vecA[i] * vecB[i];
+    normA += vecA[i] * vecA[i];
+    normB += vecB[i] * vecB[i];
+  }
+  if (normA === 0 || normB === 0) return 0;
+  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+// Chat / Q&A endpoint
+app.post('/api/chat', async (req, res) => {
+  const { query } = req.body;
+
+  if (!query || query.trim().length === 0) {
+    return res.status(400).json({ error: 'Query parameter is required.' });
+  }
+
+  try {
+    const db = readDB();
+    const chunks = db.chunks || [];
+
+    if (chunks.length === 0) {
+      return res.json({
+        answer: 'No website data has been crawled yet. Please enter a URL on the Scraper tab to populate the database.',
+        sources: []
+      });
+    }
+
+    // 1. Generate query embedding
+    const queryEmbedding = await generateEmbedding(query);
+
+    // 2. Compute similarity for each chunk
+    const scoredChunks = chunks.map((chunk) => {
+      const similarity = cosineSimilarity(queryEmbedding, chunk.embedding);
+      return { ...chunk, similarity };
+    });
+
+    // 3. Sort by similarity desc and select top-5
+    scoredChunks.sort((a, b) => b.similarity - a.similarity);
+    const topChunks = scoredChunks.slice(0, 5).filter(c => c.similarity > 0.15);
+
+    // Fallback if none matches threshold
+    const relevantChunks = topChunks.length > 0 ? topChunks : scoredChunks.slice(0, 3);
+
+    // 4. Generate answer
+    const answer = await answerQuestionWithContext(query, relevantChunks);
+
+    // 5. Deduplicate and format sources to return to client
+    const sources = relevantChunks.map((chunk) => ({
+      id: chunk.id,
+      url: chunk.url,
+      title: chunk.title,
+      text: chunk.text,
+      similarity: chunk.similarity
+    }));
+
+    res.json({
+      answer,
+      sources
+    });
+  } catch (error) {
+    console.error('Chat endpoint error:', error);
+    res.status(500).json({ error: `Failed to process Q&A query: ${error.message}` });
+  }
 });
 
 // Root status check
