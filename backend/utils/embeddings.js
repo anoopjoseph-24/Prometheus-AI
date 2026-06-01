@@ -42,8 +42,14 @@ function generateMockEmbedding(text) {
 
 /**
  * Calls Gemini gemini-embedding-2 to create a vector embedding for a single text chunk.
+ * @param {string} text Text chunk to embed
+ * @param {boolean} forceMock If true, bypass Gemini API and generate a mock embedding
  */
-async function generateEmbedding(text) {
+async function generateEmbedding(text, forceMock = false) {
+  if (forceMock) {
+    return generateMockEmbedding(text);
+  }
+
   const apiKey = getApiKey();
   if (!apiKey) {
     console.warn(`\x1b[33m[WARN] GEMINI_API_KEY is not defined in backend/.env. Using deterministic mock embeddings for offline local testing.\x1b[0m`);
@@ -76,22 +82,24 @@ async function generateEmbedding(text) {
  * Calls Gemini gemini-embedding-2 to create vector embeddings for an array of text chunks in batches.
  * This is highly optimized and prevents rate-limiting issues (429 errors).
  * @param {string[]} texts Array of text chunks to embed
- * @returns {Promise<number[][]>} Array of vector embeddings
+ * @returns {Promise<{embeddings: number[][], isMock: boolean}>} Array of vector embeddings and a fallback flag
  */
 async function generateEmbeddingsBatch(texts) {
-  if (texts.length === 0) return [];
+  if (texts.length === 0) return { embeddings: [], isMock: false };
   
   const apiKey = getApiKey();
   if (!apiKey) {
     console.warn(`\x1b[33m[WARN] GEMINI_API_KEY is not defined in backend/.env. Using deterministic mock embeddings for offline local testing.\x1b[0m`);
-    return texts.map(t => generateMockEmbedding(t));
+    return { embeddings: texts.map(t => generateMockEmbedding(t)), isMock: true };
   }
 
   const genAI = getGenAI();
   if (!genAI) {
     console.warn(`\x1b[33m[WARN] GoogleGenerativeAI client could not be initialized. Using deterministic mock embeddings.\x1b[0m`);
-    return texts.map(t => generateMockEmbedding(t));
+    return { embeddings: texts.map(t => generateMockEmbedding(t)), isMock: true };
   }
+
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-embedding-2' });
@@ -108,20 +116,43 @@ async function generateEmbeddingsBatch(texts) {
         content: { parts: [{ text: t }] }
       }));
       
-      const result = await model.batchEmbedContents({ requests });
-      if (result && result.embeddings) {
-        const values = result.embeddings.map(emb => emb.values);
-        allEmbeddings.push(...values);
-      } else {
-        throw new Error('Received empty response from Gemini Batch Embeddings API.');
+      let success = false;
+      let retries = 3;
+      let delay = 5000; // start with 5 seconds wait on rate limit
+      
+      while (!success && retries > 0) {
+        try {
+          const result = await model.batchEmbedContents({ requests });
+          if (result && result.embeddings) {
+            const values = result.embeddings.map(emb => emb.values);
+            allEmbeddings.push(...values);
+            success = true;
+          } else {
+            throw new Error('Received empty response from Gemini Batch Embeddings API.');
+          }
+        } catch (err) {
+          const errMsg = err.message || '';
+          if (errMsg.includes('429') || errMsg.includes('Quota exceeded') || errMsg.includes('Too Many Requests')) {
+            retries--;
+            if (retries > 0) {
+              console.warn(`[WARN] Embedding rate limit hit (429). Retrying in ${delay / 1000}s... (${retries} retries left)`);
+              await sleep(delay);
+              delay *= 1.5; // exponential backoff
+            } else {
+              throw err;
+            }
+          } else {
+            throw err;
+          }
+        }
       }
     }
     
-    return allEmbeddings;
+    return { embeddings: allEmbeddings, isMock: false };
   } catch (error) {
     console.error('Error querying Gemini Batch Embeddings API:', error.message);
     console.warn('\x1b[33m[WARN] Falling back to offline mock embeddings for this entire batch due to API error.\x1b[0m');
-    return texts.map(t => generateMockEmbedding(t));
+    return { embeddings: texts.map(t => generateMockEmbedding(t)), isMock: true };
   }
 }
 

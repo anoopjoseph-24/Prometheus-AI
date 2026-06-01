@@ -60,11 +60,43 @@ function cleanText(text) {
     .trim();
 }
 
+// Exclude common binary and asset file formats from web crawling
+const EXCLUDED_EXTENSIONS = [
+  '.pdf', '.zip', '.tar', '.gz', '.rar', '.7z',
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico', '.tiff', '.bmp',
+  '.mp4', '.mp3', '.wav', '.avi', '.mov', '.flv',
+  '.css', '.js', '.json', '.xml',
+  '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'
+];
+
 // Utility to validate URLs
 function isValidUrl(urlString) {
   try {
     const url = new URL(urlString);
     return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch (e) {
+    return false;
+  }
+}
+
+// Helper to determine if a URL is valid for HTML crawling
+function shouldCrawlUrl(urlString, startHostname) {
+  try {
+    if (!isValidUrl(urlString)) return false;
+    const urlObj = new URL(urlString);
+    
+    // Domain restrictions (must stay on target host)
+    if (urlObj.hostname !== startHostname) return false;
+    
+    // Protocol restrictions
+    if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') return false;
+
+    // Check file extension exclusion
+    const pathname = urlObj.pathname.toLowerCase();
+    const hasExcludedExtension = EXCLUDED_EXTENSIONS.some(ext => pathname.endsWith(ext));
+    if (hasExcludedExtension) return false;
+
+    return true;
   } catch (e) {
     return false;
   }
@@ -77,8 +109,15 @@ async function scrapePage(url) {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, Gecko) Chrome/91.0.4472.124 Safari/537.36'
       },
-      timeout: 5000
+      timeout: 5000,
+      responseType: 'text'
     });
+
+    // Check response Content-Type to verify it is HTML before parsing
+    const contentType = response.headers['content-type'] || '';
+    if (!contentType.includes('text/html') && !contentType.includes('application/xhtml+xml')) {
+      throw new Error(`Unsupported content type: ${contentType}`);
+    }
 
     const html = response.data;
     const $ = cheerio.load(html);
@@ -90,9 +129,6 @@ async function scrapePage(url) {
     $('script, style, nav, footer, header, iframe').remove();
     const rawText = $('body').text();
     const cleanTextStr = cleanText(rawText);
-    const words = cleanTextStr.split(/\s+/).filter(Boolean);
-    const wordCount = words.length;
-
 
     // Extract raw links
     const links = [];
@@ -159,7 +195,7 @@ async function crawlUrl(startUrl, maxDepth = 2, maxPages = 15, onProgress) {
 
             const finalUrl = urlObj.href;
 
-            if (urlObj.hostname === startHostname && !visited.has(finalUrl) && isValidUrl(finalUrl)) {
+            if (!visited.has(finalUrl) && shouldCrawlUrl(finalUrl, startHostname)) {
               if (!queue.some(item => item.url === finalUrl)) {
                 queue.push({ url: finalUrl, depth: depth + 1, parentUrl: url });
               }
@@ -184,6 +220,18 @@ app.get('/api/crawl', async (req, res) => {
 
   if (!url || !isValidUrl(url)) {
     return res.status(400).json({ error: 'A valid starting URL is required.' });
+  }
+
+  // Validate starting URL has no excluded file extension
+  try {
+    const startUrlObj = new URL(url);
+    const startPathname = startUrlObj.pathname.toLowerCase();
+    const isExcluded = EXCLUDED_EXTENSIONS.some(ext => startPathname.endsWith(ext));
+    if (isExcluded) {
+      return res.status(400).json({ error: 'Starting URL must be an HTML page, not a binary file or static asset.' });
+    }
+  } catch (e) {
+    return res.status(400).json({ error: 'Invalid URL formatting.' });
   }
 
   const crawlDepth = parseInt(depth) || 2;
@@ -251,7 +299,7 @@ app.get('/api/crawl', async (req, res) => {
 
     // Call batched embedding API
     const textsToEmbed = chunkInputs.map(item => item.text);
-    const embeddings = await generateEmbeddingsBatch(textsToEmbed);
+    const { embeddings, isMock } = await generateEmbeddingsBatch(textsToEmbed);
 
     // Map embeddings back to chunks
     const dbChunks = chunkInputs.map((item, idx) => ({
@@ -269,7 +317,11 @@ app.get('/api/crawl', async (req, res) => {
     const db = readDB();
     db.pages = crawledPages;
     db.chunks = dbChunks;
-    db.settings = { currentSite: url, crawledAt: new Date().toISOString() };
+    db.settings = { 
+      currentSite: url, 
+      crawledAt: new Date().toISOString(),
+      embeddingsType: isMock ? 'mock' : 'gemini'
+    };
     writeDB(db);
 
     sendEvent('status', {
@@ -331,8 +383,9 @@ app.post('/api/chat', async (req, res) => {
       });
     }
 
-    // 1. Generate query embedding
-    const queryEmbedding = await generateEmbedding(query);
+    // 1. Generate query embedding (match the mock status of database embeddings)
+    const useMock = db.settings?.embeddingsType === 'mock';
+    const queryEmbedding = await generateEmbedding(query, useMock);
 
     // 2. Compute similarity for each chunk
     const scoredChunks = chunks.map((chunk) => {
