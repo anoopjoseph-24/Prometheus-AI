@@ -20,38 +20,13 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// Database configuration (JSON)
-const DB_PATH = path.join(__dirname, 'data', 'db.json');
+// Database configuration (MongoDB Atlas / local JSON fallback)
+const { readDB, writeDB, getMongoDb } = require('./utils/db');
 
-// Ensure data directory exists
-if (!fs.existsSync(path.join(__dirname, 'data'))) {
-  fs.mkdirSync(path.join(__dirname, 'data'));
-}
-
-// Initialize database if it doesn't exist
-if (!fs.existsSync(DB_PATH)) {
-  fs.writeFileSync(DB_PATH, JSON.stringify({ pages: [], chunks: [], settings: {} }, null, 2));
-}
-
-// Helper to read database
-function readDB() {
-  try {
-    const data = fs.readFileSync(DB_PATH, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error('Error reading database:', error);
-    return { pages: [], chunks: [], settings: {} };
-  }
-}
-
-// Helper to write database
-function writeDB(data) {
-  try {
-    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-  } catch (error) {
-    console.error('Error writing database:', error);
-  }
-}
+// Connect to MongoDB Atlas (if MONGODB_URI is provided)
+getMongoDb().catch(err => {
+  console.error("Initial MongoDB connection failed:", err.message);
+});
 
 // Utility to clean text content
 function cleanText(text) {
@@ -314,8 +289,8 @@ app.get('/api/crawl', async (req, res) => {
       embedding: embeddings[idx]
     }));
 
-    // Save to db.json
-    const db = readDB();
+    // Save to database
+    const db = await readDB();
     db.pages = crawledPages;
     db.chunks = dbChunks;
     db.settings = { 
@@ -325,7 +300,7 @@ app.get('/api/crawl', async (req, res) => {
     };
     db.summary = null;
     db.faqs = null;
-    writeDB(db);
+    await writeDB(db);
 
     sendEvent('status', {
       message: `Crawling completed. Processed ${crawledPages.length} pages and generated ${dbChunks.length} text chunks.`,
@@ -341,14 +316,14 @@ app.get('/api/crawl', async (req, res) => {
 });
 
 // Endpoint to retrieve crawled pages
-app.get('/api/pages', (req, res) => {
-  const db = readDB();
+app.get('/api/pages', async (req, res) => {
+  const db = await readDB();
   res.json({ pages: db.pages, settings: db.settings });
 });
 
 // Endpoint to retrieve chunks
-app.get('/api/chunks', (req, res) => {
-  const db = readDB();
+app.get('/api/chunks', async (req, res) => {
+  const db = await readDB();
   res.json({ chunks: db.chunks || [] });
 });
 
@@ -396,7 +371,7 @@ app.post('/api/chat', async (req, res) => {
   }
 
   try {
-    const db = readDB();
+    const db = await readDB();
     const chunks = db.chunks || [];
 
     if (chunks.length === 0) {
@@ -449,8 +424,8 @@ app.post('/api/chat', async (req, res) => {
 });
 
 // Root status check
-app.get('/api/status', (req, res) => {
-  const db = readDB();
+app.get('/api/status', async (req, res) => {
+  const db = await readDB();
   res.json({
     status: 'online',
     crawledPagesCount: db.pages.length,
@@ -462,7 +437,7 @@ app.get('/api/status', (req, res) => {
 app.get('/api/pages/:id/summary', async (req, res) => {
   const { id } = req.params;
   try {
-    const db = readDB();
+    const db = await readDB();
     const page = db.pages.find(p => p.id === id);
     if (!page) {
       return res.status(404).json({ error: 'Page not found.' });
@@ -535,7 +510,7 @@ app.get('/api/pages/:id/summary', async (req, res) => {
     }
 
     page.summary = summaryText;
-    writeDB(db);
+    await writeDB(db);
 
     res.json({ summary: summaryText });
   } catch (error) {
@@ -547,7 +522,7 @@ app.get('/api/pages/:id/summary', async (req, res) => {
 // Executive site summarization endpoint
 app.get('/api/summary', async (req, res) => {
   try {
-    const db = readDB();
+    const db = await readDB();
     if (db.summary) {
       return res.json(db.summary);
     }
@@ -556,7 +531,7 @@ app.get('/api/summary', async (req, res) => {
     }
     const summary = await generateSiteSummary(db.pages);
     db.summary = summary;
-    writeDB(db);
+    await writeDB(db);
     res.json(summary);
   } catch (error) {
     console.error('Error in /api/summary:', error);
@@ -567,7 +542,7 @@ app.get('/api/summary', async (req, res) => {
 // Auto-generated FAQs endpoint
 app.get('/api/faqs', async (req, res) => {
   try {
-    const db = readDB();
+    const db = await readDB();
     if (db.faqs) {
       return res.json({ faqs: db.faqs });
     }
@@ -576,7 +551,7 @@ app.get('/api/faqs', async (req, res) => {
     }
     const faqs = await generateSiteFAQs(db.pages);
     db.faqs = faqs;
-    writeDB(db);
+    await writeDB(db);
     res.json({ faqs });
   } catch (error) {
     console.error('Error in /api/faqs:', error);
@@ -587,7 +562,7 @@ app.get('/api/faqs', async (req, res) => {
 // Force regenerate summary & FAQs endpoint
 app.post('/api/summary/regenerate', async (req, res) => {
   try {
-    const db = readDB();
+    const db = await readDB();
     if (!db.pages || db.pages.length === 0) {
       return res.status(404).json({ error: 'No website content found. Crawl a site first.' });
     }
@@ -597,7 +572,7 @@ app.post('/api/summary/regenerate', async (req, res) => {
     ]);
     db.summary = summary;
     db.faqs = faqs;
-    writeDB(db);
+    await writeDB(db);
     res.json({ summary, faqs });
   } catch (error) {
     console.error('Error in /api/summary/regenerate:', error);
