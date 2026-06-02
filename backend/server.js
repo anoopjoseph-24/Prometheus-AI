@@ -12,6 +12,7 @@ const fs = require('fs');
 const { chunkText } = require('./utils/chunker');
 const { generateEmbedding, generateEmbeddingsBatch } = require('./utils/embeddings');
 const { answerQuestionWithContext } = require('./utils/chat');
+const { generateSiteSummary, generateSiteFAQs } = require('./utils/summary');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -322,6 +323,8 @@ app.get('/api/crawl', async (req, res) => {
       crawledAt: new Date().toISOString(),
       embeddingsType: isMock ? 'mock' : 'gemini'
     };
+    db.summary = null;
+    db.faqs = null;
     writeDB(db);
 
     sendEvent('status', {
@@ -453,6 +456,67 @@ app.get('/api/status', (req, res) => {
     crawledPagesCount: db.pages.length,
     currentSite: db.settings.currentSite || null
   });
+});
+
+// Executive site summarization endpoint
+app.get('/api/summary', async (req, res) => {
+  try {
+    const db = readDB();
+    if (db.summary) {
+      return res.json(db.summary);
+    }
+    if (!db.pages || db.pages.length === 0) {
+      return res.status(404).json({ error: 'No website content found. Crawl a site first.' });
+    }
+    const summary = await generateSiteSummary(db.pages);
+    db.summary = summary;
+    writeDB(db);
+    res.json(summary);
+  } catch (error) {
+    console.error('Error in /api/summary:', error);
+    res.status(500).json({ error: `Failed to generate summary: ${error.message}` });
+  }
+});
+
+// Auto-generated FAQs endpoint
+app.get('/api/faqs', async (req, res) => {
+  try {
+    const db = readDB();
+    if (db.faqs) {
+      return res.json({ faqs: db.faqs });
+    }
+    if (!db.pages || db.pages.length === 0) {
+      return res.status(404).json({ error: 'No website content found. Crawl a site first.' });
+    }
+    const faqs = await generateSiteFAQs(db.pages);
+    db.faqs = faqs;
+    writeDB(db);
+    res.json({ faqs });
+  } catch (error) {
+    console.error('Error in /api/faqs:', error);
+    res.status(500).json({ error: `Failed to generate FAQs: ${error.message}` });
+  }
+});
+
+// Force regenerate summary & FAQs endpoint
+app.post('/api/summary/regenerate', async (req, res) => {
+  try {
+    const db = readDB();
+    if (!db.pages || db.pages.length === 0) {
+      return res.status(404).json({ error: 'No website content found. Crawl a site first.' });
+    }
+    const [summary, faqs] = await Promise.all([
+      generateSiteSummary(db.pages),
+      generateSiteFAQs(db.pages)
+    ]);
+    db.summary = summary;
+    db.faqs = faqs;
+    writeDB(db);
+    res.json({ summary, faqs });
+  } catch (error) {
+    console.error('Error in /api/summary/regenerate:', error);
+    res.status(500).json({ error: `Failed to regenerate: ${error.message}` });
+  }
 });
 
 app.listen(PORT, () => {
