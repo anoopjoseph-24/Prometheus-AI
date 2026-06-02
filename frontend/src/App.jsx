@@ -22,6 +22,91 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
+const renderInlineCodeAndBold = (text) => {
+  if (!text) return '';
+  const boldParts = text.split('**');
+  return boldParts.map((boldPart, boldIndex) => {
+    const isBold = boldIndex % 2 === 1;
+    const codeParts = boldPart.split('`');
+    const renderedCode = codeParts.map((codePart, codeIndex) => {
+      const isCode = codeIndex % 2 === 1;
+      if (isCode) {
+        return (
+          <code key={codeIndex} className="bg-zinc-100 text-zinc-900 px-1 py-0.5 rounded font-mono text-[10px] border border-zinc-200">
+            {codePart}
+          </code>
+        );
+      }
+      return codePart;
+    });
+    
+    if (isBold) {
+      return (
+        <strong key={boldIndex} className="font-extrabold text-zinc-950 bg-zinc-100/60 px-1.5 py-0.5 rounded border border-zinc-200/50">
+          {renderedCode}
+        </strong>
+      );
+    }
+    return <React.Fragment key={boldIndex}>{renderedCode}</React.Fragment>;
+  });
+};
+
+const renderFormattedText = (text) => {
+  if (!text) return null;
+  const lines = text.split('\n');
+  return (
+    <div className="space-y-1">
+      {lines.map((line, lineIdx) => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          return <div key={lineIdx} className="h-2" />;
+        }
+        
+        let isBullet = false;
+        let isNumbered = false;
+        let numPrefix = "";
+        let content = line;
+        
+        const numMatch = trimmed.match(/^(\d+)\.\s(.*)/);
+        if (trimmed.startsWith('* ') || trimmed.startsWith('- ') || trimmed.startsWith('• ')) {
+          isBullet = true;
+          content = trimmed.substring(2);
+        } else if (numMatch) {
+          isNumbered = true;
+          numPrefix = numMatch[1] + ".";
+          content = numMatch[2];
+        }
+        
+        const renderedParts = renderInlineCodeAndBold(content);
+        
+        if (isBullet) {
+          return (
+            <div key={lineIdx} className="flex items-start gap-2 pl-3 py-0.5 text-left">
+              <span className="text-brand-primary text-xs mt-1 shrink-0">•</span>
+              <span className="flex-1">{renderedParts}</span>
+            </div>
+          );
+        }
+        
+        if (isNumbered) {
+          return (
+            <div key={lineIdx} className="flex items-start gap-2 pl-3 py-0.5 text-left">
+              <span className="text-brand-primary text-[10px] font-bold mt-1.5 shrink-0 min-w-[14px] text-right">{numPrefix}</span>
+              <span className="flex-1">{renderedParts}</span>
+            </div>
+          );
+        }
+        
+        return (
+          <div key={lineIdx} className="leading-relaxed">
+            {renderedParts}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('crawl');
   const [isCrawling, setIsCrawling] = useState(false);
@@ -31,7 +116,7 @@ export default function App() {
   // Scraper inputs
   const [targetUrl, setTargetUrl] = useState('');
   const [maxDepth, setMaxDepth] = useState(2);
-  const [maxPages, setMaxPages] = useState(15);
+  const [maxPages, setMaxPages] = useState(2);
   const [onlySameDomain, setOnlySameDomain] = useState(true);
 
   // Pages state
@@ -587,7 +672,7 @@ export default function App() {
     const urlParams = new URLSearchParams({
       url: targetUrl,
       depth: maxDepth,
-      maxPages: maxPages
+      maxPages: maxPages || 2
     });
 
     const eventSource = new EventSource(`/api/crawl?${urlParams.toString()}`);
@@ -850,8 +935,6 @@ export default function App() {
                     <option value="1">1 (Direct Page)</option>
                     <option value="2">2 (Standard links)</option>
                     <option value="3">3 (Sub-folders)</option>
-                    <option value="4">4 (Sub-folders D4)</option>
-                    <option value="5">5 (Deep Crawl D5)</option>
                   </select>
                 </div>
 
@@ -860,9 +943,12 @@ export default function App() {
                   <input
                     type="number"
                     min="1"
-                    max="250"
+                    max="15"
                     value={maxPages}
-                    onChange={(e) => setMaxPages(parseInt(e.target.value) || 15)}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      setMaxPages(isNaN(val) ? '' : Math.min(Math.max(val, 1), 15));
+                    }}
                     disabled={isCrawling}
                     className="w-full bg-zinc-50 border border-workspace-border focus:border-brand-primary focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none text-zinc-900 font-medium"
                   />
@@ -1133,9 +1219,9 @@ export default function App() {
                           <div className="h-3.5 bg-zinc-200 rounded w-4/5"></div>
                         </div>
                       ) : pageSummary ? (
-                        <p className="text-xs text-zinc-700 leading-relaxed font-sans bg-white border border-zinc-150 rounded-xl p-3.5 whitespace-pre-line font-medium shadow-sm border-l-4 border-l-brand-primary">
-                          {pageSummary}
-                        </p>
+                        <div className="text-xs text-zinc-700 leading-relaxed font-sans bg-white border border-zinc-150 rounded-xl p-3.5 font-medium shadow-sm border-l-4 border-l-brand-primary">
+                          {renderFormattedText(pageSummary)}
+                        </div>
                       ) : (
                         <p className="text-xs text-workspace-muted italic font-medium">No page summary generated.</p>
                       )}
@@ -1271,7 +1357,7 @@ export default function App() {
                               : 'bg-zinc-900 text-zinc-100 shadow-md font-medium'
                           }`}
                         >
-                          <p className="whitespace-pre-wrap">{msg.text}</p>
+                          <div className="whitespace-pre-wrap">{renderFormattedText(msg.text)}</div>
                           {isBot && msg.sources?.length > 0 && (
                             <div className="mt-2.5 pt-2 border-t border-zinc-100 flex flex-wrap gap-1.5">
                               <span className="text-[9px] text-zinc-400 font-bold block w-full mb-1">Retrieved Sources:</span>
@@ -1494,9 +1580,9 @@ export default function App() {
                     {/* Core Purpose */}
                     <div className="flex flex-col gap-2">
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Core Purpose & Scope</span>
-                      <p className="text-xs text-zinc-700 leading-relaxed font-sans bg-zinc-50 border-l-4 border-brand-primary rounded-r-xl p-4 whitespace-pre-line font-medium shadow-sm">
-                        {siteSummary?.purpose || "No purpose statement generated."}
-                      </p>
+                      <div className="text-xs text-zinc-700 leading-relaxed font-sans bg-zinc-50 border-l-4 border-brand-primary rounded-r-xl p-4 font-medium shadow-sm">
+                        {renderFormattedText(siteSummary?.purpose || "No purpose statement generated.")}
+                      </div>
                     </div>
 
                     {/* Key Takeaways */}
@@ -1508,7 +1594,9 @@ export default function App() {
                             <div className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5 border border-emerald-150">
                               <span className="text-[10px] font-bold">✓</span>
                             </div>
-                            <span className="text-xs text-zinc-700 font-semibold leading-normal">{takeaway}</span>
+                            <div className="text-xs text-zinc-700 font-semibold leading-normal flex-1">
+                              {renderFormattedText(takeaway)}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1584,9 +1672,9 @@ export default function App() {
                             </button>
                             {isExpanded && (
                               <div className="px-4 pb-4 pt-1 bg-zinc-50 border-t border-zinc-100 flex flex-col gap-3">
-                                <p className="text-xs text-zinc-650 leading-relaxed font-medium">
-                                  {faq.answer}
-                                </p>
+                                <div className="text-xs text-zinc-650 leading-relaxed font-medium">
+                                  {renderFormattedText(faq.answer)}
+                                </div>
                                 <button
                                   onClick={() => handleAskFaqChat(faq.question)}
                                   className="self-end bg-brand-primary/10 hover:bg-brand-primary hover:text-white text-brand-primary font-bold text-[10px] px-3.5 py-1.5 rounded-lg flex items-center gap-1 transition-all border border-brand-primary/20"
