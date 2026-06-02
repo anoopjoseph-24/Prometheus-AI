@@ -156,6 +156,25 @@ export default function App() {
     handleSendMessage(null, question);
   };
 
+  const handleSectionClick = (section, idx) => {
+    if (!pages || pages.length === 0) return;
+    
+    let matchedPage = pages.find(p => {
+      const pTitle = (p.title || '').toLowerCase();
+      const sTitle = (section.title || '').toLowerCase();
+      return pTitle.includes(sTitle) || sTitle.includes(pTitle);
+    });
+    
+    if (!matchedPage && pages[idx]) {
+      matchedPage = pages[idx];
+    }
+    
+    if (matchedPage) {
+      setSelectedChunkPage(matchedPage);
+      setActiveTab('chunks');
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'chunks') {
       fetchChunks();
@@ -1410,14 +1429,20 @@ export default function App() {
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Indexed Content Directories</span>
                       <div className="flex flex-col gap-2">
                         {siteSummary?.keySections?.map((section, idx) => (
-                          <div key={idx} className="flex items-center gap-3 bg-zinc-50/50 border border-zinc-150 rounded-xl px-4 py-3 hover:bg-zinc-50 transition-all">
-                            <div className="w-7 h-7 rounded-lg bg-zinc-200/60 text-zinc-650 flex items-center justify-center shrink-0 shadow-sm border border-zinc-200">
+                          <div
+                            key={idx}
+                            onClick={() => handleSectionClick(section, idx)}
+                            className="flex items-center gap-3 bg-zinc-50/50 border border-zinc-150 rounded-xl px-4 py-3 hover:border-brand-primary/45 hover:bg-brand-primary/5 hover:scale-[1.008] transition-all cursor-pointer group shadow-sm"
+                            title="Click to inspect document chunks"
+                          >
+                            <div className="w-7 h-7 rounded-lg bg-zinc-200/60 text-zinc-650 group-hover:bg-brand-primary/10 group-hover:text-brand-primary flex items-center justify-center shrink-0 shadow-sm border border-zinc-200 transition-all">
                               <span className="text-[10px] font-bold font-mono">#{idx + 1}</span>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <h4 className="text-xs font-bold text-zinc-800 truncate">{section.title}</h4>
+                              <h4 className="text-xs font-bold text-zinc-800 group-hover:text-brand-primary transition-all truncate">{section.title}</h4>
                               <p className="text-[10px] text-workspace-muted truncate mt-0.5 font-medium">{section.description}</p>
                             </div>
+                            <ChevronRight size={14} className="text-zinc-400 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all ml-auto" />
                           </div>
                         ))}
                       </div>

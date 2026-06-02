@@ -77,7 +77,7 @@ async function answerQuestionWithContext(query, contextChunks) {
           messages: [
             {
               role: 'system',
-              content: 'You are Prometheus AI, a RAG assistant. You must ONLY answer questions based on the provided Context. If the answer cannot be found in the context, politely state that you do not know. Never mention "Antigravity". Always cite your sources using [Source X] notation where X corresponds to the source index number.'
+              content: 'You are Prometheus AI, a RAG assistant. You must ONLY answer questions based on the provided Context. If the answer cannot be found in the context, politely state that you do not know. Never mention "Antigravity". Do NOT include inline citations like [Source X] or similar brackets in your response.'
             },
             {
               role: 'user',
@@ -97,7 +97,8 @@ async function answerQuestionWithContext(query, contextChunks) {
 
       if (response.data && response.data.choices && response.data.choices[0]) {
         console.log('✅ Chat generated successfully via Groq!');
-        return response.data.choices[0].message.content;
+        const rawContent = response.data.choices[0].message.content;
+        return rawContent.replace(/\[Source\s*\d+\]/gi, '').replace(/\s+/g, ' ').trim();
       } else {
         throw new Error('Invalid response structure from Groq API');
       }
@@ -126,7 +127,7 @@ async function answerQuestionWithContext(query, contextChunks) {
     try {
       const model = genAI.getGenerativeModel({
         model: 'gemini-flash-latest',
-        systemInstruction: 'You are Prometheus AI, a RAG assistant. You must ONLY answer questions based on the provided Context. If the answer cannot be found in the context, politely state that you do not know. Never mention "Antigravity". Always cite your sources using [Source X] notation where X corresponds to the source index number.'
+        systemInstruction: 'You are Prometheus AI, a RAG assistant. You must ONLY answer questions based on the provided Context. If the answer cannot be found in the context, politely state that you do not know. Never mention "Antigravity". Do NOT include inline citations like [Source X] or similar brackets in your response.'
       });
 
       const contextText = contextChunks
@@ -137,7 +138,8 @@ async function answerQuestionWithContext(query, contextChunks) {
 
       const result = await model.generateContent(prompt);
       const response = await result.response;
-      return response.text();
+      const rawText = response.text();
+      return rawText.replace(/\[Source\s*\d+\]/gi, '').replace(/\s+/g, ' ').trim();
     } catch (error) {
       const errMsg = error.message || '';
       if (errMsg.includes('429') || errMsg.includes('Quota exceeded') || errMsg.includes('Too Many Requests')) {
