@@ -56,6 +56,13 @@ export default function App() {
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
 
+  // Summary & FAQ states
+  const [siteSummary, setSiteSummary] = useState(null);
+  const [faqs, setFaqs] = useState([]);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [summaryError, setSummaryError] = useState(null);
+  const [expandedFaqIndex, setExpandedFaqIndex] = useState(null);
+
   const nodesRef = useRef([]);
   const edgesRef = useRef([]);
   const canvasRef = useRef(null);
@@ -109,9 +116,51 @@ export default function App() {
     }
   };
 
+  const fetchSummaryAndFaqs = async (forceRegenerate = false) => {
+    setIsGeneratingSummary(true);
+    setSummaryError(null);
+    try {
+      const endpoint = forceRegenerate ? '/api/summary/regenerate' : '/api/summary';
+      const method = forceRegenerate ? 'POST' : 'GET';
+      
+      const summaryRes = await fetch(endpoint, { method });
+      if (!summaryRes.ok) {
+        throw new Error('Failed to generate website summary.');
+      }
+      const summaryData = await summaryRes.json();
+      
+      // If we force regenerated, the POST returns both summary and faqs.
+      if (forceRegenerate) {
+        setSiteSummary(summaryData.summary);
+        setFaqs(summaryData.faqs || []);
+      } else {
+        setSiteSummary(summaryData);
+        // Fetch FAQs
+        const faqsRes = await fetch('/api/faqs');
+        if (faqsRes.ok) {
+          const faqsData = await faqsRes.json();
+          setFaqs(faqsData.faqs || []);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      setSummaryError(err.message);
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
+
+  const handleAskFaqChat = (question) => {
+    setChatQuery(question);
+    setActiveTab('chat');
+    handleSendMessage(null, question);
+  };
+
   useEffect(() => {
     if (activeTab === 'chunks') {
       fetchChunks();
+    } else if (activeTab === 'summary') {
+      fetchSummaryAndFaqs();
     }
   }, [activeTab]);
 
@@ -1263,21 +1312,200 @@ export default function App() {
           </div>
         )}
 
-        {/* DAY 4-5 PLACEHOLDERS */}
-        {activeTab !== 'crawl' && activeTab !== 'chunks' && activeTab !== 'chat' && (
+        {/* TAB 4: SITE SUMMARIES */}
+        {activeTab === 'summary' && (
+          <div className="flex flex-col gap-6">
+            {pages.length === 0 ? (
+              <div className="workspace-card p-12 flex flex-col items-center justify-center text-center gap-4 min-h-[400px]">
+                <Globe className="text-zinc-300 animate-bounce" size={48} />
+                <div className="max-w-md">
+                  <h3 className="text-base font-bold text-zinc-800 mb-1">No Site Data Crawled</h3>
+                  <p className="text-xs text-workspace-muted leading-relaxed">
+                    Please crawl a website on the <strong>Crawl Control</strong> tab first to generate summaries and Q&As.
+                  </p>
+                </div>
+              </div>
+            ) : isGeneratingSummary ? (
+              /* Glowing Skeleton Loader */
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-pulse">
+                <div className="lg:col-span-2 workspace-card p-6 flex flex-col gap-5 min-h-[500px]">
+                  <div className="h-6 bg-zinc-200 rounded-lg w-1/3 mb-2"></div>
+                  <div className="h-4 bg-zinc-100 rounded-lg w-full"></div>
+                  <div className="h-4 bg-zinc-100 rounded-lg w-5/6"></div>
+                  <div className="h-4 bg-zinc-100 rounded-lg w-4/5"></div>
+                  <div className="border-t border-zinc-100 pt-5 mt-2 flex flex-col gap-4">
+                    <div className="h-5 bg-zinc-200 rounded-lg w-1/4"></div>
+                    <div className="h-4 bg-zinc-100 rounded-lg w-full"></div>
+                    <div className="h-4 bg-zinc-100 rounded-lg w-11/12"></div>
+                  </div>
+                  <div className="border-t border-zinc-100 pt-5 mt-2 flex flex-col gap-4">
+                    <div className="h-5 bg-zinc-200 rounded-lg w-1/4"></div>
+                    <div className="h-10 bg-zinc-50 rounded-xl w-full"></div>
+                    <div className="h-10 bg-zinc-50 rounded-xl w-full"></div>
+                  </div>
+                </div>
+                <div className="lg:col-span-1 workspace-card p-6 flex flex-col gap-4">
+                  <div className="h-6 bg-zinc-200 rounded-lg w-1/2 mb-2"></div>
+                  <div className="h-12 bg-zinc-100 rounded-xl w-full"></div>
+                  <div className="h-12 bg-zinc-100 rounded-xl w-full"></div>
+                  <div className="h-12 bg-zinc-100 rounded-xl w-full"></div>
+                  <div className="h-12 bg-zinc-100 rounded-xl w-full"></div>
+                </div>
+              </div>
+            ) : summaryError ? (
+              <div className="workspace-card p-8 flex flex-col items-center justify-center text-center gap-4">
+                <AlertTriangle className="text-brand-primary animate-pulse" size={40} />
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-800">Failed to Generate Summary</h3>
+                  <p className="text-xs text-workspace-muted mt-1">{summaryError}</p>
+                </div>
+                <button
+                  onClick={() => fetchSummaryAndFaqs(true)}
+                  className="bg-brand-primary hover:bg-brand-accent text-white px-5 py-2.5 rounded-xl font-semibold text-xs transition-all shadow-md shadow-brand-primary/10 select-none"
+                >
+                  Retry Generation
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Executive Summary Panel */}
+                <div className="lg:col-span-2 workspace-card p-6 flex flex-col justify-between min-h-[500px]">
+                  <div className="flex flex-col gap-6">
+                    <div className="flex items-center gap-3 border-b border-zinc-100 pb-4">
+                      <div className="w-9 h-9 rounded-lg bg-brand-primary/10 text-brand-primary flex items-center justify-center shadow-sm">
+                        <FileText size={18} />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-zinc-800">Executive Site Summary</h3>
+                        <p className="text-[10px] text-workspace-muted font-medium">Auto-generated high-level analysis of the crawled web domain.</p>
+                      </div>
+                    </div>
+
+                    {/* Core Purpose */}
+                    <div className="flex flex-col gap-2">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Core Purpose & Scope</span>
+                      <p className="text-xs text-zinc-700 leading-relaxed font-sans bg-zinc-50 border-l-4 border-brand-primary rounded-r-xl p-4 whitespace-pre-line font-medium shadow-sm">
+                        {siteSummary?.purpose || "No purpose statement generated."}
+                      </p>
+                    </div>
+
+                    {/* Key Takeaways */}
+                    <div className="flex flex-col gap-2.5">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Key Takeaways & Insights</span>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {siteSummary?.keyTakeaways?.map((takeaway, idx) => (
+                          <div key={idx} className="flex items-start gap-3 bg-white border border-zinc-150 rounded-xl p-3.5 shadow-sm hover:border-zinc-250 transition-all">
+                            <div className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5 border border-emerald-150">
+                              <span className="text-[10px] font-bold">✓</span>
+                            </div>
+                            <span className="text-xs text-zinc-700 font-semibold leading-normal">{takeaway}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Key Sections Map */}
+                    <div className="flex flex-col gap-2.5">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Indexed Content Directories</span>
+                      <div className="flex flex-col gap-2">
+                        {siteSummary?.keySections?.map((section, idx) => (
+                          <div key={idx} className="flex items-center gap-3 bg-zinc-50/50 border border-zinc-150 rounded-xl px-4 py-3 hover:bg-zinc-50 transition-all">
+                            <div className="w-7 h-7 rounded-lg bg-zinc-200/60 text-zinc-650 flex items-center justify-center shrink-0 shadow-sm border border-zinc-200">
+                              <span className="text-[10px] font-bold font-mono">#{idx + 1}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-xs font-bold text-zinc-800 truncate">{section.title}</h4>
+                              <p className="text-[10px] text-workspace-muted truncate mt-0.5 font-medium">{section.description}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                  </div>
+
+                  <div className="border-t border-zinc-100 pt-5 mt-6 flex justify-between items-center text-xs text-workspace-muted font-semibold">
+                    <span>Summary updated on: {new Date(siteSummary?.crawledAt || Date.now()).toLocaleDateString()}</span>
+                    <button
+                      onClick={() => fetchSummaryAndFaqs(true)}
+                      disabled={isGeneratingSummary}
+                      className="bg-zinc-900 hover:bg-black text-white px-5 py-2.5 rounded-xl flex items-center gap-1.5 transition-all select-none shadow-md"
+                    >
+                      <RefreshCw size={12} className={isGeneratingSummary ? 'animate-spin' : ''} />
+                      Regenerate AI Analysis
+                    </button>
+                  </div>
+                </div>
+
+                {/* FAQ panel */}
+                <div className="lg:col-span-1 workspace-card p-6 flex flex-col gap-5 min-h-[500px]">
+                  <div className="flex items-center gap-3 border-b border-zinc-100 pb-4">
+                    <div className="w-9 h-9 rounded-lg bg-brand-primary/10 text-brand-primary flex items-center justify-center shadow-sm">
+                      <HelpCircle size={18} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-zinc-800">Grounded Q&A Editor</h3>
+                      <p className="text-[10px] text-workspace-muted font-medium">Auto-generated interactive questions for instant testing.</p>
+                    </div>
+                  </div>
+
+                  {faqs.length === 0 ? (
+                    <div className="flex-grow flex flex-col items-center justify-center text-center text-workspace-muted italic text-xs">
+                      No questions generated.
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-3.5 overflow-y-auto max-h-[520px] pr-1">
+                      {faqs.map((faq, idx) => {
+                        const isExpanded = expandedFaqIndex === idx;
+                        return (
+                          <div key={idx} className="border border-zinc-200 rounded-xl overflow-hidden shadow-sm transition-all hover:border-zinc-300 bg-white">
+                            <button
+                              onClick={() => setExpandedFaqIndex(isExpanded ? null : idx)}
+                              className="w-full text-left px-4 py-3.5 flex items-center justify-between gap-3 text-xs font-bold text-zinc-850 hover:bg-zinc-50 transition-all select-none"
+                            >
+                              <span>{faq.question}</span>
+                              <ChevronRight size={14} className={`text-zinc-400 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                            </button>
+                            {isExpanded && (
+                              <div className="px-4 pb-4 pt-1 bg-zinc-50 border-t border-zinc-100 flex flex-col gap-3">
+                                <p className="text-xs text-zinc-650 leading-relaxed font-medium">
+                                  {faq.answer}
+                                </p>
+                                <button
+                                  onClick={() => handleAskFaqChat(faq.question)}
+                                  className="self-end bg-brand-primary/10 hover:bg-brand-primary hover:text-white text-brand-primary font-bold text-[10px] px-3.5 py-1.5 rounded-lg flex items-center gap-1 transition-all border border-brand-primary/20"
+                                >
+                                  <MessageSquare size={12} />
+                                  Ask Chatbot
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 5: ANALYTICS INFO PLACEHOLDER */}
+        {activeTab === 'analytics' && (
           <div className="workspace-card p-12 flex flex-col items-center justify-center text-center gap-5 min-h-[400px]">
             <div className="w-14 h-14 rounded-xl bg-brand-primary/5 border border-brand-primary/10 flex items-center justify-center text-brand-glow animate-pulse">
-              {activeTab === 'summary' && <FileText size={24} />}
-              {activeTab === 'analytics' && <BarChart3 size={24} />}
+              <BarChart3 size={24} />
             </div>
 
             <div className="max-w-md">
               <h3 className="text-base font-bold text-zinc-800 mb-1">
-                {activeTab === 'summary' && 'Day 4 integration: Summarizer'}
-                {activeTab === 'analytics' && 'Day 5 integration: Operation Charts'}
+                Day 5 integration: Operation Charts
               </h3>
               <p className="text-xs text-workspace-muted leading-relaxed">
-                Visual interfaces and hooks for this module will be initialized dynamically on its respective roadmap step.
+                Visual analytics, keyword cloud, reading time calculators, and sitemap health trackers will be initialized dynamically on its respective roadmap step.
               </p>
             </div>
           </div>
