@@ -458,6 +458,92 @@ app.get('/api/status', (req, res) => {
   });
 });
 
+// Document-specific summary generator
+app.get('/api/pages/:id/summary', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const db = readDB();
+    const page = db.pages.find(p => p.id === id);
+    if (!page) {
+      return res.status(404).json({ error: 'Page not found.' });
+    }
+
+    if (page.summary) {
+      return res.json({ summary: page.summary });
+    }
+
+    const groqApiKey = process.env.GROQ_API_KEY;
+    const systemPrompt = `You are a concise document assistant. Summarize the provided document in exactly two bullet points. Be extremely clear and highlight key names, stats, or numbers. Return the output as plain text.`;
+
+    let summaryText = '';
+
+    // 1. Try Groq API
+    if (groqApiKey && groqApiKey.trim().length > 0) {
+      try {
+        console.log(`Generating page summary for ${page.title} via Groq...`);
+        const response = await axios.post(
+          'https://api.groq.com/openai/v1/chat/completions',
+          {
+            model: 'llama-3.3-70b-versatile',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: `Document Title: ${page.title}\nDocument Content:\n${page.content.substring(0, 4000)}` }
+            ],
+            temperature: 0.2
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${groqApiKey}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 10000
+          }
+        );
+        if (response.data && response.data.choices && response.data.choices[0]) {
+          summaryText = response.data.choices[0].message.content.trim();
+        }
+      } catch (err) {
+        console.error('Groq page summary failed:', err.message);
+      }
+    }
+
+    // 2. Try Gemini API
+    if (!summaryText) {
+      const geminiApiKey = process.env.GEMINI_API_KEY;
+      if (geminiApiKey) {
+        try {
+          console.log(`Generating page summary for ${page.title} via Gemini...`);
+          const genAI = new GoogleGenerativeAI(geminiApiKey);
+          const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
+          const prompt = `${systemPrompt}\n\nDocument Title: ${page.title}\nDocument Content:\n${page.content.substring(0, 4000)}`;
+          const result = await model.generateContent(prompt);
+          const response = await result.response;
+          summaryText = response.text().trim();
+        } catch (err) {
+          console.error('Gemini page summary failed:', err.message);
+        }
+      }
+    }
+
+    // 3. Fallback
+    if (!summaryText) {
+      const words = page.content.split(/\s+/).filter(Boolean);
+      const sentences = page.content.split(/[.!?]+/).filter(s => s.trim().length > 5);
+      const bullet1 = sentences[0] ? sentences[0].trim() + '.' : `Document contains ${words.length} words of text.`;
+      const bullet2 = sentences[1] ? sentences[1].trim() + '.' : `Indexing was successfully completed.`;
+      summaryText = `• ${bullet1}\n• ${bullet2}`;
+    }
+
+    page.summary = summaryText;
+    writeDB(db);
+
+    res.json({ summary: summaryText });
+  } catch (error) {
+    console.error('Error in page summary endpoint:', error);
+    res.status(500).json({ error: `Failed to generate page summary: ${error.message}` });
+  }
+});
+
 // Executive site summarization endpoint
 app.get('/api/summary', async (req, res) => {
   try {

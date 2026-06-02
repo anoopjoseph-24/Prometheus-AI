@@ -63,6 +63,10 @@ export default function App() {
   const [summaryError, setSummaryError] = useState(null);
   const [expandedFaqIndex, setExpandedFaqIndex] = useState(null);
 
+  // Selected document summary & tags states
+  const [pageSummary, setPageSummary] = useState("");
+  const [isPageSummaryLoading, setIsPageSummaryLoading] = useState(false);
+
   const nodesRef = useRef([]);
   const edgesRef = useRef([]);
   const canvasRef = useRef(null);
@@ -175,6 +179,41 @@ export default function App() {
     }
   };
 
+  const fetchPageSummary = async (pageId) => {
+    setIsPageSummaryLoading(true);
+    setPageSummary("");
+    try {
+      const res = await fetch(`/api/pages/${pageId}/summary`);
+      if (res.ok) {
+        const data = await res.json();
+        setPageSummary(data.summary || "");
+      }
+    } catch (err) {
+      console.error('Failed to load page summary:', err);
+    } finally {
+      setIsPageSummaryLoading(false);
+    }
+  };
+
+  const extractTopicTags = (text) => {
+    if (!text) return [];
+    const stopWords = new Set(['about', 'there', 'their', 'would', 'could', 'should', 'under', 'these', 'those', 'where', 'which', 'other', 'after', 'before', 'first', 'second', 'years', 'using', 'every', 'through', 'above', 'below', 'within', 'without', 'website', 'pages', 'crawled', 'indexed', 'content', 'products', 'results', 'showing', 'warning']);
+    const words = text.toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(/\s+/)
+      .filter(w => w.length > 4 && !stopWords.has(w));
+      
+    const freqs = {};
+    words.forEach(w => {
+      freqs[w] = (freqs[w] || 0) + 1;
+    });
+    
+    return Object.entries(freqs)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(entry => entry[0]);
+  };
+
   useEffect(() => {
     if (activeTab === 'chunks') {
       fetchChunks();
@@ -182,6 +221,12 @@ export default function App() {
       fetchSummaryAndFaqs();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (selectedChunkPage) {
+      fetchPageSummary(selectedChunkPage.id);
+    }
+  }, [selectedChunkPage]);
 
   const handleSendMessage = async (e, directText = null) => {
     if (e) e.preventDefault();
@@ -1034,21 +1079,66 @@ export default function App() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
-                  {/* Summary Stats */}
-                  <div className="grid grid-cols-3 gap-4 bg-zinc-50 border border-zinc-200/60 rounded-xl p-3.5 text-center text-xs">
-                    <div>
-                      <span className="text-zinc-500 block mb-0.5 font-medium">Segments Generated</span>
-                      <strong className="text-zinc-800 text-sm font-bold font-mono">
-                        {chunks.filter(c => c.pageId === selectedChunkPage.id).length}
-                      </strong>
+                  {/* Premium Document Summary Hub */}
+                  <div className="workspace-card p-5 bg-zinc-50/50 border border-zinc-200/80 rounded-xl flex flex-col gap-4">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-zinc-200 pb-3">
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-xs font-bold text-zinc-900 truncate">{selectedChunkPage.title}</h4>
+                        <a
+                          href={selectedChunkPage.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-workspace-muted hover:text-brand-primary truncate flex items-center gap-1 hover:underline mt-1 font-semibold"
+                        >
+                          {selectedChunkPage.url}
+                          <ExternalLink size={10} />
+                        </a>
+                      </div>
+
+                      {/* Estimated Reading Time & Wordcount Badges */}
+                      <div className="flex items-center gap-2 font-mono text-[9px] shrink-0">
+                        <span className="bg-white border border-zinc-200 text-zinc-650 px-2.5 py-1 rounded-lg font-bold shadow-sm">
+                          {selectedChunkPage.wordCount} Words
+                        </span>
+                        <span className="bg-white border border-zinc-200 text-zinc-650 px-2.5 py-1 rounded-lg font-bold shadow-sm">
+                          ~{Math.ceil((selectedChunkPage.wordCount || 0) / 200)}m Reading
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-zinc-500 block mb-0.5 font-medium">Target Chunk Size</span>
-                      <strong className="text-zinc-800 text-sm font-bold font-mono">600 Chars</strong>
-                    </div>
-                    <div>
-                      <span className="text-zinc-500 block mb-0.5 font-medium">Window Overlap</span>
-                      <strong className="text-zinc-800 text-sm font-bold font-mono">120 Chars</strong>
+
+                    {/* Topic Tags (locally extracted) */}
+                    {(() => {
+                      const tags = extractTopicTags(selectedChunkPage.content);
+                      if (tags.length === 0) return null;
+                      return (
+                        <div className="flex items-center gap-2 text-[10px] font-semibold text-zinc-600">
+                          <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider shrink-0 mt-0.5">Top Keywords:</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {tags.map((tag, tIdx) => (
+                              <span key={tIdx} className="bg-brand-primary/5 border border-brand-primary/10 text-brand-primary px-2 py-0.5 rounded-full capitalize">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* AI Page Summary Section */}
+                    <div className="flex flex-col gap-2 border-t border-zinc-150 pt-3">
+                      <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">AI Core Takeaways</span>
+                      {isPageSummaryLoading ? (
+                        <div className="flex flex-col gap-2 animate-pulse py-1">
+                          <div className="h-3.5 bg-zinc-200 rounded w-11/12"></div>
+                          <div className="h-3.5 bg-zinc-200 rounded w-4/5"></div>
+                        </div>
+                      ) : pageSummary ? (
+                        <p className="text-xs text-zinc-700 leading-relaxed font-sans bg-white border border-zinc-150 rounded-xl p-3.5 whitespace-pre-line font-medium shadow-sm border-l-4 border-l-brand-primary">
+                          {pageSummary}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-workspace-muted italic font-medium">No page summary generated.</p>
+                      )}
                     </div>
                   </div>
 
