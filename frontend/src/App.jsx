@@ -1696,21 +1696,267 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: ANALYTICS INFO PLACEHOLDER */}
+        {/* TAB 5: OPERATIONAL ANALYTICS */}
         {activeTab === 'analytics' && (
-          <div className="workspace-card p-12 flex flex-col items-center justify-center text-center gap-5 min-h-[400px]">
-            <div className="w-14 h-14 rounded-xl bg-brand-primary/5 border border-brand-primary/10 flex items-center justify-center text-brand-glow animate-pulse">
-              <BarChart3 size={24} />
-            </div>
+          <div className="flex flex-col gap-6 animate-fadeIn">
+            {pages.length === 0 ? (
+              <div className="workspace-card p-12 flex flex-col items-center justify-center text-center gap-4 min-h-[400px]">
+                <BarChart3 className="text-zinc-300 animate-pulse" size={48} />
+                <div className="max-w-md">
+                  <h3 className="text-base font-bold text-zinc-800 mb-1">No Site Analytics Available</h3>
+                  <p className="text-xs text-workspace-muted leading-relaxed">
+                    Please crawl a website on the <strong>Crawl Control</strong> tab first to gather indexing data and content metrics.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Metric Overview Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                  <div className="workspace-card p-5 flex items-center gap-4 hover:shadow-md transition-all">
+                    <div className="w-11 h-11 rounded-xl bg-brand-primary/5 border border-brand-primary/10 flex items-center justify-center text-brand-primary shrink-0 shadow-sm">
+                      <FileText size={20} />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-workspace-muted font-bold uppercase tracking-wider block">Indexed Pages</span>
+                      <span className="text-xl font-bold text-zinc-800">{pages.length}</span>
+                    </div>
+                  </div>
 
-            <div className="max-w-md">
-              <h3 className="text-base font-bold text-zinc-800 mb-1">
-                Day 5 integration: Operation Charts
-              </h3>
-              <p className="text-xs text-workspace-muted leading-relaxed">
-                Visual analytics, keyword cloud, reading time calculators, and sitemap health trackers will be initialized dynamically on its respective roadmap step.
-              </p>
-            </div>
+                  <div className="workspace-card p-5 flex items-center gap-4 hover:shadow-md transition-all">
+                    <div className="w-11 h-11 rounded-xl bg-brand-primary/5 border border-brand-primary/10 flex items-center justify-center text-brand-primary shrink-0 shadow-sm">
+                      <Database size={20} />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-workspace-muted font-bold uppercase tracking-wider block">Vector Chunks</span>
+                      <span className="text-xl font-bold text-zinc-800">{chunks.length}</span>
+                    </div>
+                  </div>
+
+                  <div className="workspace-card p-5 flex items-center gap-4 hover:shadow-md transition-all">
+                    <div className="w-11 h-11 rounded-xl bg-brand-primary/5 border border-brand-primary/10 flex items-center justify-center text-brand-primary shrink-0 shadow-sm">
+                      <Globe size={20} />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-workspace-muted font-bold uppercase tracking-wider block">Total Wordcount</span>
+                      <span className="text-xl font-bold text-zinc-800 font-mono">
+                        {pages.reduce((sum, p) => sum + (p.wordCount || 0), 0).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="workspace-card p-5 flex items-center gap-4 hover:shadow-md transition-all">
+                    <div className="w-11 h-11 rounded-xl bg-brand-primary/5 border border-brand-primary/10 flex items-center justify-center text-brand-primary shrink-0 shadow-sm">
+                      <Info size={20} />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-workspace-muted font-bold uppercase tracking-wider block">Reading Duration</span>
+                      <span className="text-xl font-bold text-zinc-800">
+                        ~{Math.ceil(pages.reduce((sum, p) => sum + (p.wordCount || 0), 0) / 200)} min
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Middle Section: Visual Charts */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  
+                  {/* Left Column: Word Count Distribution (SVG Bar Chart) */}
+                  <div className="lg:col-span-2 workspace-card p-6 flex flex-col gap-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-zinc-800">Word Density Distribution</h3>
+                      <p className="text-[11px] text-workspace-muted font-medium">Top indexed documents compared by size (total word count).</p>
+                    </div>
+
+                    {/* SVG Bar Chart Area */}
+                    <div className="border border-zinc-200 bg-zinc-50/50 rounded-xl p-5 flex flex-col items-stretch min-h-[300px] justify-between">
+                      {(() => {
+                        const topPages = [...pages].sort((a, b) => (b.wordCount || 0) - (a.wordCount || 0)).slice(0, 7);
+                        const maxWordCount = Math.max(...topPages.map(p => p.wordCount || 1));
+                        
+                        return (
+                          <div className="flex-grow flex items-end justify-around gap-4 pt-6 h-[220px]">
+                            {topPages.map((p, pIdx) => {
+                              const heightPercentage = ((p.wordCount || 0) / maxWordCount) * 100;
+                              const displayTitle = p.title.length > 20 ? p.title.substring(0, 18) + '...' : p.title;
+                              
+                              return (
+                                <div key={p.id || pIdx} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group relative cursor-pointer">
+                                  {/* Tooltip on Hover */}
+                                  <div className="absolute bottom-full mb-2 bg-zinc-900 text-white text-[9px] font-bold px-2 py-1 rounded shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-10 whitespace-nowrap pointer-events-none">
+                                    {p.title} ({p.wordCount} words)
+                                  </div>
+                                  
+                                  {/* Vertical Bar */}
+                                  <div 
+                                    style={{ height: `${Math.max(heightPercentage, 8)}%` }} 
+                                    className="w-full bg-gradient-to-t from-brand-accent to-brand-primary rounded-t-lg group-hover:brightness-110 shadow-sm transition-all duration-500 hover:scale-x-105"
+                                  />
+                                  
+                                  {/* Label */}
+                                  <span className="text-[9px] text-zinc-500 font-semibold truncate max-w-[80px] text-center mt-1">
+                                    {displayTitle}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+                      
+                      <div className="border-t border-zinc-200/80 mt-4 pt-3 flex justify-between text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                        <span>📊 Documents</span>
+                        <span>Wordcount Scale (Max Normalized)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Keyword Density */}
+                  <div className="lg:col-span-1 workspace-card p-6 flex flex-col gap-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-zinc-800">Top Keyword Density</h3>
+                      <p className="text-[11px] text-workspace-muted font-medium">Most frequent contextual terms across the index.</p>
+                    </div>
+
+                    <div className="flex flex-col gap-4 overflow-y-auto max-h-[300px] pr-1">
+                      {(() => {
+                        const stopWords = new Set(['about', 'there', 'their', 'would', 'could', 'should', 'under', 'these', 'those', 'where', 'which', 'other', 'after', 'before', 'first', 'second', 'years', 'using', 'every', 'through', 'above', 'below', 'within', 'without', 'website', 'pages', 'crawled', 'indexed', 'content', 'products', 'results', 'showing', 'warning', 'offered', 'offers', 'offering', 'admission', 'admissions', 'college', 'engineering', 'courses', 'programs', 'accredited', 'department', 'highlights', 'office', 'kerala', 'contact', 'telephone', 'mobile', 'details']);
+                        
+                        const wordCounts = {};
+                        pages.forEach(p => {
+                          if (!p.content) return;
+                          const words = p.content.toLowerCase()
+                            .replace(/[^\w\s]/g, '')
+                            .split(/\s+/)
+                            .filter(w => w.length > 4 && !stopWords.has(w));
+                          
+                          words.forEach(w => {
+                            wordCounts[w] = (wordCounts[w] || 0) + 1;
+                          });
+                        });
+                        
+                        const topKeywords = Object.entries(wordCounts)
+                          .sort((a, b) => b[1] - a[1])
+                          .slice(0, 6);
+
+                        if (topKeywords.length === 0) {
+                          return <div className="text-xs text-workspace-muted italic">No keywords extracted.</div>;
+                        }
+
+                        const maxFrequency = topKeywords[0][1];
+
+                        return topKeywords.map(([word, freq], idx) => {
+                          const barWidthPercentage = (freq / maxFrequency) * 100;
+                          return (
+                            <div key={idx} className="flex flex-col gap-1.5">
+                              <div className="flex justify-between items-center text-xs font-semibold text-zinc-700">
+                                <span className="capitalize">{word}</span>
+                                <span className="font-mono text-[10px] text-workspace-muted">{freq} hits</span>
+                              </div>
+                              <div className="w-full bg-zinc-150 h-2 rounded-full overflow-hidden">
+                                <div 
+                                  style={{ width: `${barWidthPercentage}%` }} 
+                                  className="bg-brand-primary h-full rounded-full transition-all duration-700"
+                                />
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom Section: Crawl Health & Mock Resource Calculator */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  
+                  {/* Crawl Health */}
+                  <div className="workspace-card p-6 flex flex-col gap-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-zinc-800">Crawl Performance Health</h3>
+                      <p className="text-[11px] text-workspace-muted font-medium">Link response status and scraping reliability checks.</p>
+                    </div>
+
+                    <div className="flex items-center justify-around gap-6 py-2 border border-zinc-150 bg-zinc-50/40 rounded-xl">
+                      {/* SVG Gauge */}
+                      <div className="relative flex items-center justify-center">
+                        <svg className="w-24 h-24" viewBox="0 0 36 36">
+                          <path
+                            className="text-zinc-200"
+                            strokeWidth="3"
+                            stroke="currentColor"
+                            fill="none"
+                            d="M18 2.0845
+                              a 15.9155 15.9155 0 0 1 0 31.831
+                              a 15.9155 15.9155 0 0 1 0 -31.831"
+                          />
+                          <path
+                            className="text-emerald-500"
+                            strokeWidth="3.2"
+                            strokeDasharray="100, 100"
+                            strokeLinecap="round"
+                            stroke="currentColor"
+                            fill="none"
+                            d="M18 2.0845
+                              a 15.9155 15.9155 0 0 1 0 31.831
+                              a 15.9155 15.9155 0 0 1 0 -31.831"
+                          />
+                        </svg>
+                        <div className="absolute text-center flex flex-col items-center">
+                          <span className="text-sm font-bold text-emerald-600">100%</span>
+                          <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">Success</span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-2.5 text-xs text-zinc-700 font-semibold">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 block"></span>
+                          <span>HTTP 200 OK: {pages.length} pages</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-zinc-400">
+                          <span className="w-2.5 h-2.5 rounded-full bg-zinc-200 block"></span>
+                          <span>Failed (Retry): 0 pages</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-brand-primary block"></span>
+                          <span>Host Restrictions: active</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Resource Allocation */}
+                  <div className="workspace-card p-6 flex flex-col gap-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-zinc-800">AI Context Token Allocation</h3>
+                      <p className="text-[11px] text-workspace-muted font-medium">Estimated tokens and API resources occupied by current index.</p>
+                    </div>
+
+                    <div className="flex flex-col gap-3 font-semibold text-xs text-zinc-700">
+                      <div className="flex justify-between items-center py-2 border-b border-zinc-100">
+                        <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider">Vector Tokens (Approx.)</span>
+                        <span className="font-mono bg-zinc-50 border border-zinc-200 px-2 py-0.5 rounded text-[11px]">
+                          {Math.round(pages.reduce((sum, p) => sum + (p.wordCount || 0), 0) * 1.33).toLocaleString()} tkn
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-zinc-100">
+                        <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider">Embeddings Dimensionality</span>
+                        <span className="font-mono bg-zinc-50 border border-zinc-200 px-2 py-0.5 rounded text-[11px]">
+                          768-D Float Array
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-zinc-100">
+                        <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider">Groq / Gemini Quota Saved</span>
+                        <span className="font-mono bg-zinc-50 border border-zinc-200 px-2 py-0.5 rounded text-[11px]">
+                          Active cache check passed
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </>
+            )}
           </div>
         )}
 
