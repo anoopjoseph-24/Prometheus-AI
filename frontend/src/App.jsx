@@ -606,7 +606,7 @@ export default function App() {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, []);
+  }, [activeTab]);
 
   // Click & Drag node handlers
   const handleMouseDown = (e) => {
