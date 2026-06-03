@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
+
 const renderInlineCodeAndBold = (text) => {
   if (!text) return '';
   const boldParts = text.split('**');
@@ -173,7 +175,7 @@ export default function App() {
     fetchStatus();
     
     const handleCleanup = () => {
-      navigator.sendBeacon('/api/db/clear');
+      navigator.sendBeacon(`${BACKEND_URL}/api/db/clear`);
     };
     window.addEventListener('beforeunload', handleCleanup);
     window.addEventListener('unload', handleCleanup);
@@ -185,7 +187,7 @@ export default function App() {
 
   const fetchStatus = async () => {
     try {
-      const res = await fetch('/api/pages');
+      const res = await fetch(`${BACKEND_URL}/api/pages`);
       if (res.ok) {
         const data = await res.json();
         if (data.pages && data.pages.length > 0) {
@@ -204,7 +206,7 @@ export default function App() {
 
   const fetchChunks = async () => {
     try {
-      const res = await fetch('/api/chunks');
+      const res = await fetch(`${BACKEND_URL}/api/chunks`);
       if (res.ok) {
         const data = await res.json();
         if (data.chunks) {
@@ -223,7 +225,7 @@ export default function App() {
       const endpoint = forceRegenerate ? '/api/summary/regenerate' : '/api/summary';
       const method = forceRegenerate ? 'POST' : 'GET';
       
-      const summaryRes = await fetch(endpoint, { method });
+      const summaryRes = await fetch(`${BACKEND_URL}${endpoint}`, { method });
       if (!summaryRes.ok) {
         throw new Error('Failed to generate website summary.');
       }
@@ -236,7 +238,7 @@ export default function App() {
       } else {
         setSiteSummary(summaryData);
         // Fetch FAQs
-        const faqsRes = await fetch('/api/faqs');
+        const faqsRes = await fetch(`${BACKEND_URL}/api/faqs`);
         if (faqsRes.ok) {
           const faqsData = await faqsRes.json();
           setFaqs(faqsData.faqs || []);
@@ -279,7 +281,7 @@ export default function App() {
     setIsPageSummaryLoading(true);
     setPageSummary("");
     try {
-      const res = await fetch(`/api/pages/${pageId}/summary`);
+      const res = await fetch(`${BACKEND_URL}/api/pages/${pageId}/summary`);
       if (res.ok) {
         const data = await res.json();
         setPageSummary(data.summary || "");
@@ -341,7 +343,7 @@ export default function App() {
     setIsSendingMessage(true);
 
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch(`${BACKEND_URL}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -686,7 +688,7 @@ export default function App() {
       maxPages: maxPages || 2
     });
 
-    const eventSource = new EventSource(`/api/crawl?${urlParams.toString()}`);
+    const eventSource = new EventSource(`${BACKEND_URL}/api/crawl?${urlParams.toString()}`);
 
     eventSource.addEventListener('status', (event) => {
       const data = JSON.parse(event.data);
@@ -907,7 +909,7 @@ export default function App() {
           <div className="flex items-center gap-4 text-xs font-semibold text-workspace-muted">
             <span className="bg-zinc-200/50 border border-zinc-300/40 text-zinc-700 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
               <Info size={14} className="text-zinc-600" />
-              API: Active Port 5001
+              API: {BACKEND_URL ? 'Render Production' : 'Active Port 5001'}
             </span>
           </div>
         </div>
