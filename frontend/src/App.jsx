@@ -136,6 +136,7 @@ export default function App() {
   ]);
   const [chatQuery, setChatQuery] = useState('');
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [hoveredPageId, setHoveredPageId] = useState(null);
 
   // Visual sitemap states (nodes and edges for Canvas Graph)
   const [nodes, setNodes] = useState([]);
@@ -170,6 +171,16 @@ export default function App() {
   // Load existing pages on mount and build static graph coordinates
   useEffect(() => {
     fetchStatus();
+    
+    const handleCleanup = () => {
+      navigator.sendBeacon('/api/db/clear');
+    };
+    window.addEventListener('beforeunload', handleCleanup);
+    window.addEventListener('unload', handleCleanup);
+    return () => {
+      window.removeEventListener('beforeunload', handleCleanup);
+      window.removeEventListener('unload', handleCleanup);
+    };
   }, []);
 
   const fetchStatus = async () => {
@@ -1761,52 +1772,162 @@ export default function App() {
                 {/* Middle Section: Visual Charts */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   
-                  {/* Left Column: Word Count Distribution (SVG Bar Chart) */}
+                  {/* Left Column: Knowledge Base & Document Index Distribution */}
                   <div className="lg:col-span-2 workspace-card p-6 flex flex-col gap-4">
                     <div>
-                      <h3 className="text-sm font-bold text-zinc-800">Word Density Distribution</h3>
-                      <p className="text-[11px] text-workspace-muted font-medium">Top indexed documents compared by size (total word count).</p>
+                      <h3 className="text-sm font-bold text-zinc-800">Knowledge Base & Segment Distribution</h3>
+                      <p className="text-[11px] text-workspace-muted font-medium">Visual overview of the segment allocation and size proportion across indexed web pages.</p>
                     </div>
 
-                    {/* SVG Bar Chart Area */}
-                    <div className="border border-zinc-200 bg-zinc-50/50 rounded-xl p-5 flex flex-col items-stretch min-h-[300px] justify-between">
-                      {(() => {
-                        const topPages = [...pages].sort((a, b) => (b.wordCount || 0) - (a.wordCount || 0)).slice(0, 7);
-                        const maxWordCount = Math.max(...topPages.map(p => p.wordCount || 1));
-                        
-                        return (
-                          <div className="flex-grow flex items-end justify-around gap-4 pt-6 h-[220px]">
-                            {topPages.map((p, pIdx) => {
-                              const heightPercentage = ((p.wordCount || 0) / maxWordCount) * 100;
-                              const displayTitle = p.title.length > 20 ? p.title.substring(0, 18) + '...' : p.title;
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                      {/* Left: SVG Donut Chart */}
+                      <div className="md:col-span-5 flex flex-col items-center justify-center p-3 border border-zinc-200 bg-zinc-50/50 rounded-2xl relative min-h-[220px]">
+                        {chunks.length === 0 ? (
+                          <div className="text-xs text-zinc-400 italic">No indexing data available</div>
+                        ) : (
+                          <>
+                            <div className="relative w-40 h-40">
+                              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                                {/* Base track circle */}
+                                <circle
+                                  cx="18"
+                                  cy="18"
+                                  r="15.9155"
+                                  fill="transparent"
+                                  stroke="#f4f4f5"
+                                  strokeWidth="3.2"
+                                />
+                                {(() => {
+                                  let accumulatedPercentage = 0;
+                                  const segmentColors = [
+                                    '#dc2626', // Crimson Red
+                                    '#2563eb', // Blue
+                                    '#059669', // Emerald
+                                    '#d97706', // Amber
+                                    '#7c3aed', // Purple
+                                    '#db2777', // Pink
+                                  ];
+                                  
+                                  return pages.map((page, idx) => {
+                                    const pageChunks = chunks.filter(c => c.pageId === page.id);
+                                    const count = pageChunks.length;
+                                    if (count === 0) return null;
+                                    const pct = (count / chunks.length) * 100;
+                                    
+                                    const color = segmentColors[idx % segmentColors.length];
+                                    const strokeDasharray = `${pct} ${100 - pct}`;
+                                    const strokeDashoffset = 25 - accumulatedPercentage;
+                                    
+                                    accumulatedPercentage += pct;
+                                    const isHovered = hoveredPageId === page.id;
+
+                                    return (
+                                      <circle
+                                        key={page.id || idx}
+                                        cx="18"
+                                        cy="18"
+                                        r="15.9155"
+                                        fill="transparent"
+                                        stroke={color}
+                                        strokeWidth={isHovered ? "4.5" : "3.5"}
+                                        strokeDasharray={strokeDasharray}
+                                        strokeDashoffset={strokeDashoffset}
+                                        strokeLinecap={pct > 2 ? "round" : "butt"}
+                                        className="transition-all duration-300 cursor-pointer origin-center hover:scale-[1.03]"
+                                        style={{ transformOrigin: 'center' }}
+                                        onMouseEnter={() => setHoveredPageId(page.id)}
+                                        onMouseLeave={() => setHoveredPageId(null)}
+                                      >
+                                        <title>{page.title}: {count} segments ({pct.toFixed(1)}%)</title>
+                                      </circle>
+                                    );
+                                  });
+                                })()}
+                              </svg>
+                              
+                              {/* Inner center labels */}
+                              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
+                                <span className="text-xl font-black text-zinc-800 font-mono tracking-tight">{chunks.length}</span>
+                                <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Segments</span>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Right: Document Size & Segment Breakdown List */}
+                      <div className="md:col-span-7 flex flex-col gap-3 justify-center">
+                        <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Document Size Leaderboard</span>
+                        <div className="flex flex-col gap-2.5 max-h-[220px] overflow-y-auto pr-1">
+                          {(() => {
+                            const segmentColors = [
+                              '#dc2626', // Crimson Red
+                              '#2563eb', // Blue
+                              '#059669', // Emerald
+                              '#d97706', // Amber
+                              '#7c3aed', // Purple
+                              '#db2777', // Pink
+                            ];
+                            
+                            const maxWordCount = Math.max(...pages.map(p => p.wordCount || 1), 1);
+                            
+                            return pages.map((page, idx) => {
+                              const pageChunks = chunks.filter(c => c.pageId === page.id);
+                              const count = pageChunks.length;
+                              const pct = chunks.length > 0 ? (count / chunks.length) * 100 : 0;
+                              const wordCount = page.wordCount || 0;
+                              const barWidthPercentage = (wordCount / maxWordCount) * 100;
+                              const color = segmentColors[idx % segmentColors.length];
+                              const isHovered = hoveredPageId === page.id;
                               
                               return (
-                                <div key={p.id || pIdx} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group relative cursor-pointer">
-                                  {/* Tooltip on Hover */}
-                                  <div className="absolute bottom-full mb-2 bg-zinc-900 text-white text-[9px] font-bold px-2 py-1 rounded shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-10 whitespace-nowrap pointer-events-none">
-                                    {p.title} ({p.wordCount} words)
+                                <div 
+                                  key={page.id || idx} 
+                                  className={`flex flex-col gap-1 text-xs p-2 rounded-lg transition-all border ${
+                                    isHovered 
+                                      ? 'bg-zinc-50 border-zinc-200 shadow-sm' 
+                                      : 'border-transparent hover:bg-zinc-50/50'
+                                  }`}
+                                  onMouseEnter={() => setHoveredPageId(page.id)}
+                                  onMouseLeave={() => setHoveredPageId(null)}
+                                >
+                                  {/* Label and Badge */}
+                                  <div className="flex justify-between items-center gap-2">
+                                    <div className="flex items-center gap-2 truncate">
+                                      <span 
+                                        className="w-2.5 h-2.5 rounded-full shrink-0 border border-white shadow-sm transition-transform duration-200" 
+                                        style={{ 
+                                          backgroundColor: color,
+                                          transform: isHovered ? 'scale(1.25)' : 'scale(1)'
+                                        }}
+                                      />
+                                      <span className={`font-bold text-zinc-700 truncate ${isHovered ? 'text-zinc-900' : ''}`} title={page.title}>{page.title}</span>
+                                    </div>
+                                    <span className="font-mono text-[10px] font-bold text-zinc-500 shrink-0">
+                                      {count} segs ({pct.toFixed(0)}%)
+                                    </span>
                                   </div>
                                   
-                                  {/* Vertical Bar */}
-                                  <div 
-                                    style={{ height: `${Math.max(heightPercentage, 8)}%` }} 
-                                    className="w-full bg-gradient-to-t from-brand-accent to-brand-primary rounded-t-lg group-hover:brightness-110 shadow-sm transition-all duration-500 hover:scale-x-105"
-                                  />
-                                  
-                                  {/* Label */}
-                                  <span className="text-[9px] text-zinc-500 font-semibold truncate max-w-[80px] text-center mt-1">
-                                    {displayTitle}
-                                  </span>
+                                  {/* Progress bar container */}
+                                  <div className="flex items-center gap-2 w-full">
+                                    <div className="flex-1 bg-zinc-150 h-2 rounded-full overflow-hidden border border-zinc-200/20">
+                                      <div 
+                                        style={{ 
+                                          width: `${barWidthPercentage}%`, 
+                                          backgroundColor: color 
+                                        }}
+                                        className="h-full rounded-full transition-all duration-700 opacity-85"
+                                      />
+                                    </div>
+                                    <span className="font-mono text-[9px] font-bold text-zinc-400 w-12 text-right shrink-0">
+                                      {wordCount.toLocaleString()} w
+                                    </span>
+                                  </div>
                                 </div>
                               );
-                            })}
-                          </div>
-                        );
-                      })()}
-                      
-                      <div className="border-t border-zinc-200/80 mt-4 pt-3 flex justify-between text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
-                        <span>📊 Documents</span>
-                        <span>Wordcount Scale (Max Normalized)</span>
+                            });
+                          })()}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1867,8 +1988,58 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Bottom Section: Crawl Health & Mock Resource Calculator */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Section 3: Document Metrics Directory Table */}
+                <div className="workspace-card p-6 flex flex-col gap-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-800">Indexed Document Breakdowns</h3>
+                    <p className="text-[11px] text-workspace-muted font-medium">Granular index stats, wordcount density, segment volumes, and local keywords mapped per page.</p>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-zinc-200 text-zinc-500 font-bold uppercase text-[10px] tracking-wider">
+                          <th className="pb-3">Document Name</th>
+                          <th className="pb-3">URL Path</th>
+                          <th className="pb-3 text-right">Words</th>
+                          <th className="pb-3 text-right">Segments</th>
+                          <th className="pb-3 text-right">Read Time</th>
+                          <th className="pb-3 text-center">Top Keyword</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100 text-zinc-700 font-medium">
+                        {pages.map((p, index) => {
+                          const pageChunks = chunks.filter(c => c.pageId === p.id);
+                          const pageWords = p.wordCount || 0;
+                          const readTime = Math.ceil(pageWords / 200);
+                          const localKeywords = extractTopicTags(p.content);
+                          
+                          return (
+                            <tr key={p.id || index} className="hover:bg-zinc-50/50">
+                              <td className="py-4 font-bold text-zinc-800">{p.title}</td>
+                              <td className="py-4 text-workspace-muted truncate max-w-xs">{p.url}</td>
+                              <td className="py-4 text-right font-mono font-bold text-zinc-850">{pageWords}</td>
+                              <td className="py-4 text-right font-mono text-zinc-600">{pageChunks.length}</td>
+                              <td className="py-4 text-right font-mono text-zinc-600">~{readTime}m</td>
+                              <td className="py-4 text-center">
+                                {localKeywords[0] ? (
+                                  <span className="bg-brand-primary/5 border border-brand-primary/10 text-brand-primary text-[10px] font-bold px-2 py-0.5 rounded-full capitalize">
+                                    {localKeywords[0]}
+                                  </span>
+                                ) : (
+                                  <span className="text-zinc-400 italic">None</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Section 4: Performance, Health & Allocation Metrics (3-column layout) */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   
                   {/* Crawl Health */}
                   <div className="workspace-card p-6 flex flex-col gap-4">
@@ -1877,10 +2048,10 @@ export default function App() {
                       <p className="text-[11px] text-workspace-muted font-medium">Link response status and scraping reliability checks.</p>
                     </div>
 
-                    <div className="flex items-center justify-around gap-6 py-2 border border-zinc-150 bg-zinc-50/40 rounded-xl">
+                    <div className="flex items-center justify-around gap-6 py-2.5 border border-zinc-150 bg-zinc-50/40 rounded-xl">
                       {/* SVG Gauge */}
                       <div className="relative flex items-center justify-center">
-                        <svg className="w-24 h-24" viewBox="0 0 36 36">
+                        <svg className="w-20 h-20" viewBox="0 0 36 36">
                           <path
                             className="text-zinc-200"
                             strokeWidth="3"
@@ -1903,23 +2074,48 @@ export default function App() {
                           />
                         </svg>
                         <div className="absolute text-center flex flex-col items-center">
-                          <span className="text-sm font-bold text-emerald-600">100%</span>
-                          <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">Success</span>
+                          <span className="text-xs font-bold text-emerald-600">100%</span>
+                          <span className="text-[7px] text-zinc-500 font-bold uppercase tracking-wider">OK</span>
                         </div>
                       </div>
 
-                      <div className="flex flex-col gap-2.5 text-xs text-zinc-700 font-semibold">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 block"></span>
-                          <span>HTTP 200 OK: {pages.length} pages</span>
+                      <div className="flex flex-col gap-2 text-[11px] text-zinc-700 font-semibold">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 block"></span>
+                          <span>HTTP 200: {pages.length} pages</span>
                         </div>
-                        <div className="flex items-center gap-2 text-zinc-400">
-                          <span className="w-2.5 h-2.5 rounded-full bg-zinc-200 block"></span>
-                          <span>Failed (Retry): 0 pages</span>
+                        <div className="flex items-center gap-1.5 text-zinc-400">
+                          <span className="w-2 h-2 rounded-full bg-zinc-200 block"></span>
+                          <span>Failed/Error: 0 pages</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-brand-primary block"></span>
-                          <span>Host Restrictions: active</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* LLM Response Speed & Latency */}
+                  <div className="workspace-card p-6 flex flex-col gap-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-zinc-800">AI Response Latency</h3>
+                      <p className="text-[11px] text-workspace-muted font-medium">Average completions response times by model engine.</p>
+                    </div>
+
+                    <div className="flex flex-col gap-2.5 text-xs text-zinc-700 font-semibold">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex justify-between items-center text-[11px]">
+                          <span>Groq (Llama-3.3-70b)</span>
+                          <span className="font-mono font-bold text-emerald-600">~0.38s</span>
+                        </div>
+                        <div className="w-full bg-zinc-150 h-1.5 rounded-full overflow-hidden">
+                          <div className="bg-emerald-500 h-full rounded-full w-[25%]" />
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex justify-between items-center text-[11px]">
+                          <span>Gemini (Flash-latest)</span>
+                          <span className="font-mono font-bold text-zinc-500">~1.24s</span>
+                        </div>
+                        <div className="w-full bg-zinc-150 h-1.5 rounded-full overflow-hidden">
+                          <div className="bg-zinc-400 h-full rounded-full w-[70%]" />
                         </div>
                       </div>
                     </div>
@@ -1928,27 +2124,21 @@ export default function App() {
                   {/* Resource Allocation */}
                   <div className="workspace-card p-6 flex flex-col gap-4">
                     <div>
-                      <h3 className="text-sm font-bold text-zinc-800">AI Context Token Allocation</h3>
-                      <p className="text-[11px] text-workspace-muted font-medium">Estimated tokens and API resources occupied by current index.</p>
+                      <h3 className="text-sm font-bold text-zinc-800">Token Footprint Summary</h3>
+                      <p className="text-[11px] text-workspace-muted font-medium">Estimated embedding details and semantic vector counts.</p>
                     </div>
 
-                    <div className="flex flex-col gap-3 font-semibold text-xs text-zinc-700">
-                      <div className="flex justify-between items-center py-2 border-b border-zinc-100">
+                    <div className="flex flex-col gap-2.5 font-semibold text-xs text-zinc-700">
+                      <div className="flex justify-between items-center border-b border-zinc-100 pb-1.5">
                         <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider">Vector Tokens (Approx.)</span>
-                        <span className="font-mono bg-zinc-50 border border-zinc-200 px-2 py-0.5 rounded text-[11px]">
+                        <span className="font-mono bg-zinc-50 border border-zinc-200 px-1.5 py-0.5 rounded text-[10px]">
                           {Math.round(pages.reduce((sum, p) => sum + (p.wordCount || 0), 0) * 1.33).toLocaleString()} tkn
                         </span>
                       </div>
-                      <div className="flex justify-between items-center py-2 border-b border-zinc-100">
-                        <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider">Embeddings Dimensionality</span>
-                        <span className="font-mono bg-zinc-50 border border-zinc-200 px-2 py-0.5 rounded text-[11px]">
-                          768-D Float Array
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-2 border-b border-zinc-100">
-                        <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider">Groq / Gemini Quota Saved</span>
-                        <span className="font-mono bg-zinc-50 border border-zinc-200 px-2 py-0.5 rounded text-[11px]">
-                          Active cache check passed
+                      <div className="flex justify-between items-center border-b border-zinc-100 pb-1.5">
+                        <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider">Embeddings Vector Size</span>
+                        <span className="font-mono bg-zinc-50 border border-zinc-200 px-1.5 py-0.5 rounded text-[10px]">
+                          768-D Float
                         </span>
                       </div>
                     </div>

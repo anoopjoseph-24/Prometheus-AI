@@ -580,6 +580,18 @@ app.post('/api/summary/regenerate', async (req, res) => {
   }
 });
 
+// Endpoint to clear all database contents on tab/site close
+app.post('/api/db/clear', async (req, res) => {
+  try {
+    console.log("🧹 Received client exit trigger. Clearing database...");
+    await writeDB({ pages: [], chunks: [], settings: {} });
+    res.json({ success: true, message: 'Database cleared successfully.' });
+  } catch (error) {
+    console.error('Failed to clear database:', error);
+    res.status(500).json({ error: 'Failed to clear database.' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
