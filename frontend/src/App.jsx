@@ -976,11 +976,11 @@ export default function App() {
                   <input
                     type="number"
                     min="1"
-                    max="15"
+                    max="5"
                     value={maxPages}
                     onChange={(e) => {
                       const val = parseInt(e.target.value);
-                      setMaxPages(isNaN(val) ? '' : Math.min(Math.max(val, 1), 15));
+                      setMaxPages(isNaN(val) ? '' : Math.min(Math.max(val, 1), 5));
                     }}
                     disabled={isCrawling}
                     className="w-full bg-zinc-50 border border-workspace-border focus:border-brand-primary focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none text-zinc-900 font-medium"
@@ -2177,7 +2177,7 @@ export default function App() {
       {/* Onboarding Welcome Guide Modal Overlay */}
       {showOnboarding && (
         <div className="fixed inset-0 bg-zinc-950/70 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white border border-zinc-250/80 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] md:max-h-[85vh] animate-scaleUp">
+          <div className="bg-white border border-zinc-250/80 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh] animate-scaleUp">
             {/* Header Banner */}
             <div className="bg-zinc-950 p-6 flex items-center gap-4 border-b border-zinc-800 text-white relative">
               <div className="w-10 h-10 rounded-xl bg-brand-primary flex items-center justify-center shadow-lg shadow-brand-primary/35 shrink-0 animate-pulse">
@@ -2234,7 +2234,7 @@ export default function App() {
                 <div className="space-y-2.5">
                   {[
                     "Enter a target website URL.",
-                    "Select the number of pages to crawl (up to 15 max, default is 2).",
+                    "Select the number of pages to crawl (up to 5 max, default is 2).",
                     "Choose the crawl depth.",
                     "Click Start Crawling.",
                     "Ask questions about the indexed website content."
