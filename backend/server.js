@@ -447,8 +447,13 @@ app.get('/api/pages/:id/summary', async (req, res) => {
       return res.json({ summary: page.summary });
     }
 
+    const pageChunks = db.chunks ? db.chunks.filter(c => c.pageId === id) : [];
+    const combinedContent = pageChunks.length > 0
+      ? pageChunks.map(c => c.text).join('\n\n')
+      : page.content;
+
     const groqApiKey = process.env.GROQ_API_KEY;
-    const systemPrompt = `You are a concise document assistant. Summarize the provided document in exactly two bullet points. Be extremely clear and highlight key names, stats, or numbers. Return the output as plain text.`;
+    const systemPrompt = `You are a helpful document analysis assistant. Synthesize a comprehensive summary based on all the provided text segments of the document. Write exactly two bullet points that capture the most important facts, names, statistics, and main themes across all segments. Be extremely professional and return the output as plain text.`;
 
     let summaryText = '';
 
@@ -462,7 +467,7 @@ app.get('/api/pages/:id/summary', async (req, res) => {
             model: 'llama-3.3-70b-versatile',
             messages: [
               { role: 'system', content: systemPrompt },
-              { role: 'user', content: `Document Title: ${page.title}\nDocument Content:\n${page.content.substring(0, 4000)}` }
+              { role: 'user', content: `Document Title: ${page.title}\nAll Document Segments:\n${combinedContent.substring(0, 8000)}` }
             ],
             temperature: 0.2
           },
@@ -490,7 +495,7 @@ app.get('/api/pages/:id/summary', async (req, res) => {
           console.log(`Generating page summary for ${page.title} via Gemini...`);
           const genAI = new GoogleGenerativeAI(geminiApiKey);
           const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
-          const prompt = `${systemPrompt}\n\nDocument Title: ${page.title}\nDocument Content:\n${page.content.substring(0, 4000)}`;
+          const prompt = `${systemPrompt}\n\nDocument Title: ${page.title}\nAll Document Segments:\n${combinedContent.substring(0, 8000)}`;
           const result = await model.generateContent(prompt);
           const response = await result.response;
           summaryText = response.text().trim();
@@ -502,8 +507,8 @@ app.get('/api/pages/:id/summary', async (req, res) => {
 
     // 3. Fallback
     if (!summaryText) {
-      const words = page.content.split(/\s+/).filter(Boolean);
-      const sentences = page.content.split(/[.!?]+/).filter(s => s.trim().length > 5);
+      const words = combinedContent.split(/\s+/).filter(Boolean);
+      const sentences = combinedContent.split(/[.!?]+/).filter(s => s.trim().length > 5);
       const bullet1 = sentences[0] ? sentences[0].trim() + '.' : `Document contains ${words.length} words of text.`;
       const bullet2 = sentences[1] ? sentences[1].trim() + '.' : `Indexing was successfully completed.`;
       summaryText = `• ${bullet1}\n• ${bullet2}`;

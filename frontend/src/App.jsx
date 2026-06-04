@@ -140,6 +140,7 @@ export default function App() {
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [hoveredPageId, setHoveredPageId] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showSegments, setShowSegments] = useState(false);
 
   // Visual sitemap states (nodes and edges for Canvas Graph)
   const [nodes, setNodes] = useState([]);
@@ -174,11 +175,7 @@ export default function App() {
   // Load existing pages on mount and build static graph coordinates
   useEffect(() => {
     fetchStatus();
-    
-    const onboarded = localStorage.getItem('prometheus_onboarded');
-    if (!onboarded) {
-      setShowOnboarding(true);
-    }
+    setShowOnboarding(true);
     
     const handleCleanup = () => {
       navigator.sendBeacon(`${BACKEND_URL}/api/db/clear`);
@@ -322,11 +319,14 @@ export default function App() {
     if (activeTab === 'chunks') {
       fetchChunks();
     } else if (activeTab === 'summary') {
-      fetchSummaryAndFaqs();
+      if (!siteSummary || faqs.length === 0) {
+        fetchSummaryAndFaqs();
+      }
     }
   }, [activeTab]);
 
   useEffect(() => {
+    setShowSegments(false);
     if (selectedChunkPage) {
       fetchPageSummary(selectedChunkPage.id);
     }
@@ -665,6 +665,8 @@ export default function App() {
     setCrawlMessage(`[INFO] Connecting to scraping endpoint for ${targetUrl}...\n`);
     setPages([]);
     setSelectedPage(null);
+    setSiteSummary(null);
+    setFaqs([]);
 
     // Reset graph nodes to just the root node
     let origin;
@@ -1261,94 +1263,123 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Chunks List */}
-                  <div className="flex flex-col gap-4 overflow-y-auto max-h-[500px] pr-1">
-                    {(() => {
-                      const pageChunks = chunks.filter(c => c.pageId === selectedChunkPage.id);
-                      if (pageChunks.length === 0) {
-                        return (
-                          <div className="text-xs text-workspace-muted italic p-6 text-center">
-                            No chunks generated for this page. (Try re-crawling with the embedding server online).
-                          </div>
-                        );
-                      }
-                      
-                      // Defined pastel accent colors for visual distinction
-                      const stripeColors = [
-                        'border-l-[#dc2626]', // Crimson
-                        'border-l-[#2563eb]', // Blue
-                        'border-l-[#059669]', // Emerald
-                        'border-l-[#d97706]', // Amber
-                        'border-l-[#7c3aed]', // Purple
-                        'border-l-[#db2777]', // Pink
-                      ];
+                  {/* Chunks List Toggle Option */}
+                  {!showSegments ? (
+                    <div className="workspace-card p-5 border border-zinc-200 bg-zinc-50/50 rounded-xl flex flex-col items-center justify-center text-center gap-3 py-8">
+                      <Database className="text-zinc-400" size={24} />
+                      <div className="max-w-md">
+                        <p className="text-xs font-semibold text-zinc-700">This document is divided into {chunks.filter(c => c.pageId === selectedChunkPage.id).length} semantic segments.</p>
+                        <p className="text-[10px] text-workspace-muted mt-1">Inspect individual chunk text blocks and vector float dimensions.</p>
+                      </div>
+                      <button
+                        onClick={() => setShowSegments(true)}
+                        className="mt-2 bg-white border border-zinc-200 text-zinc-800 text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-zinc-50 hover:border-zinc-300 transition-all flex items-center gap-1.5 shadow-sm"
+                      >
+                        <Layers size={14} className="text-brand-primary animate-pulse" />
+                        View Divided Segments & Chunks
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-4">
+                      <div className="flex justify-between items-center px-1">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Divided Chunks ({chunks.filter(c => c.pageId === selectedChunkPage.id).length} segments)</span>
+                        <button
+                          onClick={() => setShowSegments(false)}
+                          className="text-[10px] font-bold text-brand-primary hover:underline hover:text-brand-accent flex items-center gap-1"
+                        >
+                          Hide Chunks
+                        </button>
+                      </div>
 
-                      const bgColors = [
-                        'bg-red-50/20',
-                        'bg-blue-50/20',
-                        'bg-emerald-50/20',
-                        'bg-amber-50/20',
-                        'bg-purple-50/20',
-                        'bg-pink-50/20',
-                      ];
-
-                      return pageChunks.map((chunk, idx) => {
-                        const stripeColor = stripeColors[idx % stripeColors.length];
-                        const bgColor = bgColors[idx % bgColors.length];
-                        return (
-                          <div
-                            key={chunk.id || idx}
-                            className={`border border-zinc-200/80 rounded-xl p-4 transition-all hover:shadow-md border-l-4 ${stripeColor} ${bgColor}`}
-                          >
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-xs font-bold text-zinc-800 uppercase tracking-wide">
-                                Segment #{idx + 1}
-                              </span>
-                              <div className="flex items-center gap-2 text-[9px] font-mono">
-                                <span className="bg-white border border-zinc-200 text-zinc-600 px-1.5 py-0.5 rounded">
-                                  Words: {chunk.wordCount}
-                                </span>
-                                <span className="bg-white border border-zinc-200 text-zinc-600 px-1.5 py-0.5 rounded">
-                                  Chars: {chunk.charCount}
-                                </span>
+                      <div className="flex flex-col gap-4 overflow-y-auto max-h-[500px] pr-1">
+                        {(() => {
+                          const pageChunks = chunks.filter(c => c.pageId === selectedChunkPage.id);
+                          if (pageChunks.length === 0) {
+                            return (
+                              <div className="text-xs text-workspace-muted italic p-6 text-center">
+                                No chunks generated for this page. (Try re-crawling with the embedding server online).
                               </div>
-                            </div>
-                            
-                            <p className="text-xs text-zinc-700 leading-relaxed bg-white/70 border border-zinc-100 rounded-lg p-3 whitespace-pre-wrap font-sans">
-                              {chunk.text}
-                            </p>
+                            );
+                          }
+                          
+                          // Defined pastel accent colors for visual distinction
+                          const stripeColors = [
+                            'border-l-[#dc2626]', // Crimson
+                            'border-l-[#2563eb]', // Blue
+                            'border-l-[#059669]', // Emerald
+                            'border-l-[#d97706]', // Amber
+                            'border-l-[#7c3aed]', // Purple
+                            'border-l-[#db2777]', // Pink
+                          ];
 
-                            {/* Embeddings Matrix Details */}
-                            <div className="mt-3">
-                              <details className="group cursor-pointer select-none">
-                                <summary className="text-[10px] font-bold text-zinc-500 hover:text-zinc-800 flex items-center gap-1 list-none">
-                                  <ChevronRight size={12} className="transition-transform group-open:rotate-90" />
-                                  <span>Vector Embedding Preview ({chunk.embedding?.length || 768}-D Float Array)</span>
-                                </summary>
-                                <div className="mt-2 bg-[#09090b] border border-zinc-800 rounded-lg p-3 font-mono text-[9px] text-zinc-400 group-open:animate-fadeIn">
-                                  <div className="flex items-center justify-between mb-1.5 text-zinc-500 border-b border-zinc-800 pb-1">
-                                    <span>Dimensionality: {chunk.embedding?.length || 768} floats</span>
-                                  </div>
-                                  <div className="grid grid-cols-6 gap-1 max-h-24 overflow-y-auto pr-1 select-text">
-                                    {chunk.embedding?.slice(0, 36).map((val, vIdx) => (
-                                      <span key={vIdx} className="bg-zinc-900 border border-zinc-850 px-1 py-0.5 rounded text-center text-[9px] font-semibold text-emerald-400/90">
-                                        {val.toFixed(4)}
-                                      </span>
-                                    ))}
-                                    {chunk.embedding?.length > 36 && (
-                                      <span className="col-span-6 text-center text-zinc-600 font-bold py-1">
-                                        ... and {chunk.embedding.length - 36} more dimensions
-                                      </span>
-                                    )}
+                          const bgColors = [
+                            'bg-red-50/20',
+                            'bg-blue-50/20',
+                            'bg-emerald-50/20',
+                            'bg-amber-50/20',
+                            'bg-purple-50/20',
+                            'bg-pink-50/20',
+                          ];
+
+                          return pageChunks.map((chunk, idx) => {
+                            const stripeColor = stripeColors[idx % stripeColors.length];
+                            const bgColor = bgColors[idx % bgColors.length];
+                            return (
+                              <div
+                                key={chunk.id || idx}
+                                className={`border border-zinc-200/80 rounded-xl p-4 transition-all hover:shadow-md border-l-4 ${stripeColor} ${bgColor}`}
+                              >
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-xs font-bold text-zinc-800 uppercase tracking-wide">
+                                    Segment #{idx + 1}
+                                  </span>
+                                  <div className="flex items-center gap-2 text-[9px] font-mono">
+                                    <span className="bg-white border border-zinc-200 text-zinc-600 px-1.5 py-0.5 rounded">
+                                      Words: {chunk.wordCount}
+                                    </span>
+                                    <span className="bg-white border border-zinc-200 text-zinc-600 px-1.5 py-0.5 rounded">
+                                      Chars: {chunk.charCount}
+                                    </span>
                                   </div>
                                 </div>
-                              </details>
-                            </div>
-                          </div>
-                        );
-                      });
-                    })()}
-                  </div>
+                                
+                                <p className="text-xs text-zinc-700 leading-relaxed bg-white/70 border border-zinc-100 rounded-lg p-3 whitespace-pre-wrap font-sans">
+                                  {chunk.text}
+                                </p>
+
+                                {/* Embeddings Matrix Details */}
+                                <div className="mt-3">
+                                  <details className="group cursor-pointer select-none">
+                                    <summary className="text-[10px] font-bold text-zinc-500 hover:text-zinc-800 flex items-center gap-1 list-none">
+                                      <ChevronRight size={12} className="transition-transform group-open:rotate-90" />
+                                      <span>Vector Embedding Preview ({chunk.embedding?.length || 768}-D Float Array)</span>
+                                    </summary>
+                                    <div className="mt-2 bg-[#09090b] border border-zinc-800 rounded-lg p-3 font-mono text-[9px] text-zinc-400 group-open:animate-fadeIn">
+                                      <div className="flex items-center justify-between mb-1.5 text-zinc-500 border-b border-zinc-800 pb-1">
+                                        <span>Dimensionality: {chunk.embedding?.length || 768} floats</span>
+                                      </div>
+                                      <div className="grid grid-cols-6 gap-1 max-h-24 overflow-y-auto pr-1 select-text">
+                                        {chunk.embedding?.slice(0, 36).map((val, vIdx) => (
+                                          <span key={vIdx} className="bg-zinc-900 border border-zinc-850 px-1 py-0.5 rounded text-center text-[9px] font-semibold text-emerald-400/90">
+                                            {val.toFixed(4)}
+                                          </span>
+                                        ))}
+                                        {chunk.embedding?.length > 36 && (
+                                          <span className="col-span-6 text-center text-zinc-600 font-bold py-1">
+                                            ... and {chunk.embedding.length - 36} more dimensions
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </details>
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
