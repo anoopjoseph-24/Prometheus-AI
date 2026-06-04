@@ -139,6 +139,7 @@ export default function App() {
   const [chatQuery, setChatQuery] = useState('');
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [hoveredPageId, setHoveredPageId] = useState(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Visual sitemap states (nodes and edges for Canvas Graph)
   const [nodes, setNodes] = useState([]);
@@ -173,6 +174,11 @@ export default function App() {
   // Load existing pages on mount and build static graph coordinates
   useEffect(() => {
     fetchStatus();
+    
+    const onboarded = localStorage.getItem('prometheus_onboarded');
+    if (!onboarded) {
+      setShowOnboarding(true);
+    }
     
     const handleCleanup = () => {
       navigator.sendBeacon(`${BACKEND_URL}/api/db/clear`);
@@ -799,6 +805,11 @@ export default function App() {
     };
   };
 
+  const handleCloseOnboarding = () => {
+    localStorage.setItem('prometheus_onboarded', 'true');
+    setShowOnboarding(false);
+  };
+
   return (
     <div className="flex min-h-screen bg-workspace-bg">
 
@@ -874,6 +885,15 @@ export default function App() {
           >
             <BarChart3 size={16} className={activeTab === 'analytics' ? 'text-brand-glow' : ''} />
             Analytics Info
+            <ChevronRight size={14} className="ml-auto opacity-50" />
+          </button>
+
+          <button
+            onClick={() => setShowOnboarding(true)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all hover:text-white hover:bg-sidebar-hoverBg/50 mt-auto text-zinc-400"
+          >
+            <HelpCircle size={16} />
+            Quick Start Guide
             <ChevronRight size={14} className="ml-auto opacity-50" />
           </button>
         </nav>
@@ -2153,6 +2173,98 @@ export default function App() {
         )}
 
       </main>
+
+      {/* Onboarding Welcome Guide Modal Overlay */}
+      {showOnboarding && (
+        <div className="fixed inset-0 bg-zinc-950/70 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white border border-zinc-250/80 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] md:max-h-[85vh] animate-scaleUp">
+            {/* Header Banner */}
+            <div className="bg-zinc-950 p-6 flex items-center gap-4 border-b border-zinc-800 text-white relative">
+              <div className="w-10 h-10 rounded-xl bg-brand-primary flex items-center justify-center shadow-lg shadow-brand-primary/35 shrink-0 animate-pulse">
+                <span className="text-white font-bold font-mono text-xl">Ψ</span>
+              </div>
+              <div>
+                <h2 className="text-base font-extrabold tracking-tight text-white">Welcome to Prometheus AI</h2>
+                <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-semibold">Website RAG Intelligence Platform</p>
+              </div>
+              <button 
+                onClick={handleCloseOnboarding} 
+                className="absolute top-4 right-4 text-zinc-400 hover:text-white transition-colors"
+                aria-label="Close Guide"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Scrollable Contents */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              
+              {/* Introduction Text */}
+              <div className="text-xs text-zinc-600 leading-relaxed space-y-2">
+                <p className="font-medium text-zinc-800 text-sm">
+                  Prometheus AI is a Retrieval-Augmented Generation (RAG) website intelligence platform that transforms any website into a searchable knowledge base.
+                </p>
+                <p>
+                  Enter a website URL, choose the crawl depth and page limit, and Prometheus AI will automatically:
+                </p>
+              </div>
+
+              {/* Automated Actions Checklist */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {[
+                  "Recursively crawl linked pages",
+                  "Extract and structure website content",
+                  "Generate semantic knowledge embeddings",
+                  "Build an intelligent retrieval index",
+                  "Generate executive summaries",
+                  "Answer questions using context-grounded AI"
+                ].map((cap, idx) => (
+                  <div key={idx} className="flex items-center gap-2.5 bg-zinc-50 border border-zinc-150 p-3 rounded-xl hover:bg-zinc-100/50 transition-colors">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0 text-emerald-600">
+                      <CheckCircle size={12} />
+                    </div>
+                    <span className="text-xs font-semibold text-zinc-700">{cap}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* How to Use Steps */}
+              <div className="space-y-3">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">How to Use</span>
+                <div className="space-y-2.5">
+                  {[
+                    "Enter a target website URL.",
+                    "Select the number of pages to crawl (up to 15 max, default is 2).",
+                    "Choose the crawl depth.",
+                    "Click Start Crawling.",
+                    "Ask questions about the indexed website content."
+                  ].map((step, idx) => (
+                    <div key={idx} className="flex items-start gap-3 pl-1 text-xs">
+                      <span className="w-5 h-5 rounded-md bg-zinc-100 border border-zinc-250/50 flex items-center justify-center shrink-0 font-mono font-bold text-[10px] text-zinc-500 mt-0.5">
+                        {idx + 1}
+                      </span>
+                      <span className="text-zinc-600 leading-relaxed font-semibold">
+                        {step}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Footer buttons */}
+            <div className="border-t border-zinc-200 p-4 bg-zinc-50 flex justify-end gap-3 shrink-0">
+              <button
+                onClick={handleCloseOnboarding}
+                className="bg-zinc-950 text-white text-xs font-bold px-5 py-2.5 rounded-xl hover:bg-zinc-800 transition-colors shadow-sm"
+              >
+                Let's Begin
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
