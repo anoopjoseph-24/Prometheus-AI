@@ -18,7 +18,9 @@ import {
   Info,
   Terminal,
   Layers,
-  ChevronRight
+  ChevronRight,
+  Menu,
+  X
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -141,6 +143,7 @@ export default function App() {
   const [hoveredPageId, setHoveredPageId] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showSegments, setShowSegments] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Visual sitemap states (nodes and edges for Canvas Graph)
   const [nodes, setNodes] = useState([]);
@@ -815,23 +818,41 @@ export default function App() {
   return (
     <div className="flex min-h-screen bg-workspace-bg">
 
+      {/* Sidebar mobile backdrop overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 z-30 lg:hidden backdrop-blur-xs"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Left Sidebar: Crimson & Obsidian Theme (Dark Side) */}
-      <aside className="w-64 bg-sidebar-bg border-r border-sidebar-border flex flex-col shrink-0 text-sidebar-text">
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-sidebar-bg border-r border-sidebar-border flex flex-col shrink-0 text-sidebar-text transform transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         {/* Brand Logo */}
-        <div className="p-6 border-b border-sidebar-border flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-brand-primary flex items-center justify-center shadow-lg shadow-brand-primary/30">
-            <span className="text-white font-bold font-mono text-lg">Ψ</span>
+        <div className="p-6 border-b border-sidebar-border flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-brand-primary flex items-center justify-center shadow-lg shadow-brand-primary/30">
+              <span className="text-white font-bold font-mono text-lg">Ψ</span>
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-white tracking-wide">PROMETHEUS</h1>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">RAG intelligence</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-sm font-bold text-white tracking-wide">PROMETHEUS</h1>
-            <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">RAG intelligence</p>
-          </div>
+          {/* Close Sidebar button for mobile/tablet */}
+          <button
+            onClick={() => setIsSidebarOpen(false)}
+            className="lg:hidden p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-sidebar-hoverBg/50 transition-colors"
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </button>
         </div>
 
         {/* Vertical Nav List */}
         <nav className="flex-1 px-4 py-6 flex flex-col gap-1.5">
           <button
-            onClick={() => setActiveTab('crawl')}
+            onClick={() => { setActiveTab('crawl'); setIsSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'crawl'
               ? 'text-white bg-sidebar-hoverBg border-l-2 border-brand-primary'
               : 'hover:text-white hover:bg-sidebar-hoverBg/50'
@@ -843,7 +864,7 @@ export default function App() {
           </button>
 
           <button
-            onClick={() => setActiveTab('chunks')}
+            onClick={() => { setActiveTab('chunks'); setIsSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'chunks'
               ? 'text-white bg-sidebar-hoverBg border-l-2 border-brand-primary'
               : 'hover:text-white hover:bg-sidebar-hoverBg/50'
@@ -855,7 +876,7 @@ export default function App() {
           </button>
 
           <button
-            onClick={() => setActiveTab('chat')}
+            onClick={() => { setActiveTab('chat'); setIsSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'chat'
               ? 'text-white bg-sidebar-hoverBg border-l-2 border-brand-primary'
               : 'hover:text-white hover:bg-sidebar-hoverBg/50'
@@ -867,7 +888,7 @@ export default function App() {
           </button>
 
           <button
-            onClick={() => setActiveTab('summary')}
+            onClick={() => { setActiveTab('summary'); setIsSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'summary'
               ? 'text-white bg-sidebar-hoverBg border-l-2 border-brand-primary'
               : 'hover:text-white hover:bg-sidebar-hoverBg/50'
@@ -879,7 +900,7 @@ export default function App() {
           </button>
 
           <button
-            onClick={() => setActiveTab('analytics')}
+            onClick={() => { setActiveTab('analytics'); setIsSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'analytics'
               ? 'text-white bg-sidebar-hoverBg border-l-2 border-brand-primary'
               : 'hover:text-white hover:bg-sidebar-hoverBg/50'
@@ -891,7 +912,7 @@ export default function App() {
           </button>
 
           <button
-            onClick={() => setShowOnboarding(true)}
+            onClick={() => { setShowOnboarding(true); setIsSidebarOpen(false); }}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all hover:text-white hover:bg-sidebar-hoverBg/50 mt-auto text-zinc-400"
           >
             <HelpCircle size={16} />
@@ -908,28 +929,38 @@ export default function App() {
       </aside>
 
       {/* Right Content Space: Workspace (Bright Side) */}
-      <main className="flex-grow min-h-screen workspace-grid flex flex-col text-workspace-text p-8 overflow-y-auto">
+      <main className="flex-grow min-h-screen workspace-grid flex flex-col text-workspace-text p-4 sm:p-6 lg:p-8 overflow-y-auto">
 
         {/* Workspace Title bar */}
-        <div className="flex items-center justify-between border-b border-workspace-border pb-5 mb-6">
-          <div>
-            <h2 className="text-xl font-bold tracking-tight text-zinc-900 capitalize">
-              {activeTab === 'crawl' && 'Scraper Control & Sitemap'}
-              {activeTab === 'chunks' && 'Document Segment Indexer'}
-              {activeTab === 'chat' && 'Contextual Knowledge Chat'}
-              {activeTab === 'summary' && 'Executive Summarization Hub'}
-              {activeTab === 'analytics' && 'Operational Analytics & Health'}
-            </h2>
-            <p className="text-xs text-workspace-muted mt-1">
-              {activeTab === 'crawl' && 'Ingest any URL, crawl recursively, and map out visual links.'}
-              {activeTab === 'chunks' && 'Preview documents sliced into semantic vectors.'}
-              {activeTab === 'chat' && 'Perform grounding audits and ask contextual website FAQs.'}
-              {activeTab === 'summary' && 'Review AI-generated general summaries and automated QAs.'}
-              {activeTab === 'analytics' && 'Inspect site health details, word distribution, and links.'}
-            </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-workspace-border pb-5 mb-6 gap-4">
+          <div className="flex items-start gap-3.5">
+            {/* Hamburger Menu Toggle for Mobile */}
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-xl text-zinc-650 hover:text-zinc-900 hover:bg-zinc-200/60 border border-zinc-300/40 bg-zinc-50 transition-colors shrink-0 shadow-sm mt-0.5"
+              aria-label="Open menu"
+            >
+              <Menu size={18} />
+            </button>
+            <div>
+              <h2 className="text-xl font-bold tracking-tight text-zinc-900 capitalize">
+                {activeTab === 'crawl' && 'Scraper Control & Sitemap'}
+                {activeTab === 'chunks' && 'Document Segment Indexer'}
+                {activeTab === 'chat' && 'Contextual Knowledge Chat'}
+                {activeTab === 'summary' && 'Executive Summarization Hub'}
+                {activeTab === 'analytics' && 'Operational Analytics & Health'}
+              </h2>
+              <p className="text-xs text-workspace-muted mt-1">
+                {activeTab === 'crawl' && 'Ingest any URL, crawl recursively, and map out visual links.'}
+                {activeTab === 'chunks' && 'Preview documents sliced into semantic vectors.'}
+                {activeTab === 'chat' && 'Perform grounding audits and ask contextual website FAQs.'}
+                {activeTab === 'summary' && 'Review AI-generated general summaries and automated QAs.'}
+                {activeTab === 'analytics' && 'Inspect site health details, word distribution, and links.'}
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-4 text-xs font-semibold text-workspace-muted">
-            <span className="bg-zinc-200/50 border border-zinc-300/40 text-zinc-700 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+          <div className="flex items-center gap-4 text-xs font-semibold text-workspace-muted self-start sm:self-auto shrink-0">
+            <span className="bg-zinc-200/50 border border-zinc-300/40 text-zinc-700 px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-xs">
               <Info size={14} className="text-zinc-600" />
               API: {BACKEND_URL ? 'Render Production' : 'Active Port 5001'}
             </span>
