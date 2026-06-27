@@ -37,4 +37,4 @@ Target URL → Crawl → Extract Content → Chunk → Generate Embeddings → S
 
 **Anoop Joseph**
 
-Built as a hackathon project to demonstrate intelligent website understanding using Retrieval-Augmented Generation (RAG).
+Built to demonstrate intelligent website understanding using Retrieval-Augmented Generation (RAG).
